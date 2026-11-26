@@ -7,8 +7,8 @@ const EVENT_TRIGGER_SECONDS = 1.25;
 const ACTIVATION_DELAY = 0.55;
 const SURFACE_Y = 0.04;
 const HITBOX_SCALE = 0.8;
-const HAZARD_TYPES = ["pothole", "wide-pothole", "sinkhole", "manhole", "sewage", "car", "car", "closed-manhole", "stuck-car-dry"];
-const RAIN_HAZARDS = ["puddle", "puddle", "puddle-hole", "flooded-sinkhole", "flooded-sinkhole", "sewage", "sewage", "stuck-car", "car", "closed-manhole", "meme-car"];
+const HAZARD_TYPES = ["pothole", "wide-pothole", "sinkhole", "manhole", "sewage", "car", "car", "closed-manhole", "stuck-car-dry", "bus"];
+const RAIN_HAZARDS = ["puddle", "puddle", "puddle-hole", "flooded-sinkhole", "flooded-sinkhole", "sewage", "sewage", "stuck-car", "car", "closed-manhole", "meme-car", "bus"];
 const DETAILS = {
   pothole: { width: 2.5, depth: 2.3, cause: "Caíste en un bache." },
   "wide-pothole": { width: 5.5, depth: 3.6, cause: "Caíste en un bache gigante." },
@@ -16,6 +16,7 @@ const DETAILS = {
   manhole: { width: 2.2, depth: 2.2, cause: "Caíste en una alcantarilla abierta.", dynamic: true },
   sewage: { width: 5.5, depth: 4.6, cause: "Entraste en el desbordamiento de aguas negras.", dynamic: true },
   car: { width: 1.85, depth: 3.3, cause: "Chocaste con otro carro." },
+  bus: { width: 2.35, depth: 7.5, cause: "Chocaste con un camión urbano." },
   "closed-manhole": { width: 2.2, depth: 2.2, passable: true },
   puddle: { width: 2.8, depth: 3.8, passable: true },
   "puddle-hole": { width: 2.8, depth: 3.8, cause: "Caíste en un bache escondido bajo un charco." },
@@ -158,7 +159,7 @@ function floodedMemeCar(helpers) {
 
 export function createRoadHazard(type, firstLane, helpers, random = Math.random) {
   const details = DETAILS[type];
-  if (!details || ["car", "overtaker", "wreck"].includes(type)) throw new Error(`Obstáculo vial no válido: ${type}`);
+  if (!details || ["car", "bus", "overtaker", "wreck"].includes(type)) throw new Error(`Obstáculo vial no válido: ${type}`);
   const span = details.width > 3 ? 2 : 1;
   if (!Number.isInteger(firstLane) || firstLane < 0 || firstLane + span > 3) {
     throw new Error(`Carriles no válidos: ${firstLane}, ${span}`);
@@ -313,10 +314,10 @@ export function updateRoadHazard(hazard, dt, speed, playerZ) {
   }
 }
 
-export function collidesWithHazard(hazard, playerX, playerZ) {
+export function collidesWithHazard(hazard, playerX, playerZ, vehicle = null) {
   const surface = hazard.effects?.hole ?? hazard.effects?.water;
-  const halfWidth = (hazard.width / 2 * (surface?.scale.x ?? 1) + 0.7) * HITBOX_SCALE;
-  const halfDepth = (hazard.depth / 2 * (surface?.scale.z ?? 1) + 1.4) * HITBOX_SCALE;
+  const halfWidth = (hazard.width / 2 * (surface?.scale.x ?? 1) + (vehicle?.width ?? 1.4) / 2) * HITBOX_SCALE;
+  const halfDepth = (hazard.depth / 2 * (surface?.scale.z ?? 1) + (vehicle?.depth ?? 2.8) / 2) * HITBOX_SCALE;
   return hazard.active &&
     Math.abs(playerX - hazard.object.position.x) < halfWidth &&
     Math.abs(playerZ - hazard.object.position.z) < halfDepth;

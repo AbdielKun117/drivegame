@@ -162,3 +162,35 @@ test("an emitter removed during loading cannot play a delayed ghost sound", asyn
   await effect;
   assert.equal(audio.context.sources.length, 0);
 });
+
+test("recorded music changes for pursuit independently of the siren and effects mute", async t => {
+  const { audio, errors } = audioFixture(t);
+  audio.setSettings({ music: true, effects: true });
+  await audio.start();
+  audio.tick(0.05, false);
+  const normal = audio.music.source;
+  assert.ok(normal.buffer.url.endsWith("driving-music.mp3"));
+  const patrol = { position: { x: 0, y: 0, z: 8 } };
+  audio.tick(0.05, false, patrol);
+  assert.ok(normal.stopped);
+  assert.ok(audio.music.source.buffer.url.endsWith("chase-music.mp3"));
+  const siren = audio.siren.source;
+  assert.ok(siren.buffer.url.endsWith("police-siren.mp3"));
+  assert.equal(siren.loop, true);
+  audio.tick(0.05, false, patrol);
+  assert.equal(audio.siren.source, siren);
+  const danger = audio.music.source;
+  audio.setSettings({ music: true, effects: false });
+  assert.equal(siren.stopped, true);
+  assert.equal(danger.stopped, undefined);
+  audio.tick(0.05, false);
+  assert.ok(danger.stopped);
+  assert.ok(audio.music.source.buffer.url.endsWith("driving-music.mp3"));
+  audio.setSettings({ music: false, effects: true });
+  assert.equal(audio.music, null);
+  audio.tick(0.05, false, patrol);
+  assert.ok(audio.siren);
+  audio.stop();
+  assert.ok(audio.context.sources.every(source => source.stopped));
+  assert.deepEqual(errors, []);
+});

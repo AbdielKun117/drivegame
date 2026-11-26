@@ -38,16 +38,16 @@ const helpers = {
 
 test("random selection covers every hazard and always reserves a lane", () => {
   const types = new Set();
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 10; i++) {
     for (const laneRoll of [0, 0.5, 0.999]) {
-      const rolls = [(i + 0.5) / 9, laneRoll];
+      const rolls = [(i + 0.5) / 10, laneRoll];
       const hazard = chooseHazard(() => rolls.shift());
       types.add(hazard.type);
       assert.ok(hazard.span < 3);
       assert.ok(hazard.firstLane >= 0 && hazard.firstLane + hazard.span <= 3);
     }
   }
-  assert.deepEqual([...types], ["pothole", "wide-pothole", "sinkhole", "manhole", "sewage", "car", "closed-manhole", "stuck-car-dry"]);
+  assert.deepEqual([...types], ["pothole", "wide-pothole", "sinkhole", "manhole", "sewage", "car", "closed-manhole", "stuck-car-dry", "bus"]);
 });
 
 test("two-lane damage hits both occupied lanes but never the free lane", () => {
@@ -112,6 +112,7 @@ test("all damaging hazards allow edge grazes but still collide inside their smal
   for (const type of ["car", "overtaker", "wreck"]) {
     hazards.push({ type, object: new THREE.Group(), width: 1.85, depth: 3.3, effects: {} });
   }
+  hazards.push({ type: "bus", object: new THREE.Group(), width: 2.35, depth: 7.5, effects: {} });
   for (const hazard of hazards) {
     hazard.active = true;
     hazard.object.position.z = 3;
@@ -297,7 +298,7 @@ test("spawning preserves the escape lane during an overtake in dry and wet weath
 });
 
 test("dry weather can produce a smoking car trapped in a pothole", () => {
-  const selected = chooseHazard(() => 0.99, false);
+  const selected = chooseHazard(() => 0.85, false);
   assert.equal(selected.type, "stuck-car-dry");
   const hazard = createRoadHazard(selected.type, selected.firstLane, helpers, () => 0.5);
   hazard.object.position.z = 3;
@@ -309,8 +310,8 @@ test("dry weather can produce a smoking car trapped in a pothole", () => {
 });
 
 test("the flooded meme car appears only in rain and can be excluded after its first appearance", () => {
-  assert.equal(chooseHazard(() => 0.999, true).type, "meme-car");
-  assert.notEqual(chooseHazard(() => 0.999, true, null, false).type, "meme-car");
+  assert.equal(chooseHazard(() => 0.875, true).type, "meme-car");
+  assert.notEqual(chooseHazard(() => 0.875, true, null, false).type, "meme-car");
   for (let i = 0; i < 100; i++) assert.notEqual(chooseHazard(() => i / 100, false).type, "meme-car");
   const hazard = createRoadHazard("meme-car", 1, helpers, () => 0.5);
   hazard.object.position.z = 3;

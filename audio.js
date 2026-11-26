@@ -5,6 +5,9 @@ const RECORDINGS = {
   open: new URL("./assets/audio/manhole-open.mp3", import.meta.url).href,
   rattle: new URL("./assets/audio/manhole-rattle.mp3", import.meta.url).href,
   collapse: new URL("./assets/audio/collapse.mp3", import.meta.url).href,
+  driving: new URL("./assets/audio/driving-music.mp3", import.meta.url).href,
+  chase: new URL("./assets/audio/chase-music.mp3", import.meta.url).href,
+  siren: new URL("./assets/audio/police-siren.mp3", import.meta.url).href,
   "voice-1": new URL("./assets/audio/voice-1.mp3", import.meta.url).href,
   "voice-2": new URL("./assets/audio/voice-2.mp3", import.meta.url).href,
   "voice-3": new URL("./assets/audio/voice-3.mp3", import.meta.url).href,
@@ -30,8 +33,9 @@ export class GameAudio {
     this.settings = { music: true, effects: true };
     this.context = null;
     this.playing = false;
-    this.beat = 0;
-    this.beatTimer = 0;
+    this.music = null;
+    this.musicSources = new Set();
+    this.siren = null;
     this.buffers = new Map();
     this.loadPromise = null;
     this.sources = new Set();
@@ -68,8 +72,10 @@ export class GameAudio {
       gain.connect(bus);
     }
     if (bus === this.effectsBus) this.sources.add(source);
+    if (bus === this.musicBus) this.musicSources.add(source);
     source.onended = () => {
       this.sources.delete(source);
+      this.musicSources.delete(source);
       this.spatialSounds.delete(source);
       source.disconnect();
       gain.disconnect();
@@ -80,6 +86,7 @@ export class GameAudio {
 
   stopEmitter(emitter) {
     this.removedEmitters.add(emitter);
+    if (this.siren?.emitter === emitter) this.siren = null;
     for (const [source, sound] of this.spatialSounds) {
       if (sound.emitter !== emitter) continue;
       source.stop();
@@ -91,18 +98,18 @@ export class GameAudio {
   setSettings(settings) {
     this.settings = settings;
     if (this.context) {
-      this.musicBus.gain.value = this.playing && settings.music ? 0.09 : 0;
+      this.musicBus.gain.value = this.playing && settings.music ? 0.16 : 0;
       this.effectsBus.gain.value = settings.effects ? 0.3 : 0;
       if (!settings.effects) this.stopRecordings();
+      if (!settings.music) this.stopMusic();
     }
   }
 
   async start() {
     this.stopRecordings();
+    this.stopMusic();
     this.playing = true;
     this.generation++;
-    this.beat = 0;
-    this.beatTimer = 0;
     if (!this.settings.music && !this.settings.effects) return;
     try {
       if (!this.context) {
@@ -130,6 +137,7 @@ export class GameAudio {
     this.generation++;
     if (this.context) this.musicBus.gain.value = 0;
     this.stopRecordings();
+    this.stopMusic();
   }
 
   async loadRecordings() {
@@ -149,7 +157,7 @@ export class GameAudio {
     await this.loadPromise;
   }
 
-  recording(name, volume = 1, loop = false, delay = 0, emitter = null) {
+  recording(name, volume = 1, loop = false, delay = 0, emitter = null, bus = this.effectsBus) {
     const buffer = this.buffers.get(name);
     if (!buffer) throw new Error(`La grabación ${name} no está cargada.`);
     const source = this.context.createBufferSource();
@@ -158,16 +166,40 @@ export class GameAudio {
     source.loop = loop;
     gain.gain.value = volume;
     source.connect(gain);
-    this.connectOutput(source, gain, this.effectsBus, emitter);
-    source.start(this.context.currentTime + delay);
+    this.connectOutput(source, gain, bus, emitter);
+    source.start(this.context.currentTime + delay, name === "chase" ? 1 : 0);
     return { source, gain };
   }
 
   stopRecordings() {
     this.rain = null;
+    this.siren = null;
     for (const source of this.sources) source.stop();
     this.sources.clear();
     this.spatialSounds.clear();
+  }
+
+  stopMusic() {
+    this.music = null;
+    for (const source of this.musicSources) source.stop();
+    this.musicSources.clear();
+  }
+
+  updateMusic(emitter) {
+    const name = emitter ? "chase" : "driving";
+    if (!this.settings.music || !this.buffers.has(name) || this.music?.name === name) return;
+    const time = this.context.currentTime;
+    if (this.music) {
+      const parameter = this.music.gain.gain;
+      parameter.cancelScheduledValues(time);
+      parameter.setValueAtTime(parameter.value, time);
+      parameter.linearRampToValueAtTime(0, time + 0.3);
+      this.music.source.stop(time + 0.3);
+    }
+    const music = this.recording(name, 0, true, 0, null, this.musicBus);
+    music.gain.gain.setValueAtTime(0, time);
+    music.gain.gain.linearRampToValueAtTime(name === "chase" ? 1.2 : 0.85, time + 0.4);
+    this.music = { ...music, name };
   }
 
   async recordedEffect(name, delay = 0, emitter = null) {
@@ -238,7 +270,7 @@ export class GameAudio {
     source.stop(context.currentTime + duration);
   }
 
-  tick(dt, raining) {
+  tick(dt, raining, pursuitEmitter = null) {
     if (!this.playing || this.context?.state !== "running") return;
     const time = this.context.currentTime;
     for (const sound of this.spatialSounds.values()) {
@@ -247,14 +279,13 @@ export class GameAudio {
       parameter.setValueAtTime(parameter.value, time);
       parameter.linearRampToValueAtTime(this.proximityVolume(sound.emitter), time + 0.05);
     }
-    this.beatTimer -= dt;
-    if (this.settings.music && this.beatTimer <= 0) {
-      const melody = [60, 64, 67, 69, 67, 64, 62, 64, 57, 60, 64, 67, 64, 60, 59, 62];
-      const midi = melody[this.beat % melody.length];
-      this.tone(440 * 2 ** ((midi - 69) / 12), 0.18, 0.65, this.musicBus);
-      if (this.beat % 4 === 0) this.tone(this.beat % 16 < 8 ? 130.81 : 110, 0.35, 0.5, this.musicBus, "sine");
-      this.beat++;
-      this.beatTimer = 0.23;
+    this.updateMusic(pursuitEmitter);
+    if (pursuitEmitter && this.settings.effects && this.buffers.has("siren") && this.siren?.emitter !== pursuitEmitter) {
+      this.siren?.source.stop();
+      this.siren = { ...this.recording("siren", 4, true, 0, pursuitEmitter), emitter: pursuitEmitter };
+    } else if (!pursuitEmitter && this.siren) {
+      this.siren.source.stop();
+      this.siren = null;
     }
     if (raining && this.settings.effects && !this.rain && this.buffers.has("rain")) {
       this.rain = this.recording("rain", 0, true);

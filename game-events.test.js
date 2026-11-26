@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { createWeather, updateWeather } from "./weather.js";
-import { planOvertake, createOvertaker, updateOvertaker } from "./traffic-events.js";
+import { planOvertake, createOvertaker, updateOvertaker, createTrafficVehicle, updateLaneChange } from "./traffic-events.js";
 import { collidesWithHazard } from "./road-hazards.js";
 
 test("rain starts probabilistically, lasts longer in long runs, and ends", () => {
@@ -143,4 +143,63 @@ test("a cover that suddenly opens beside a passing car can cause a crash", () =>
   assert.equal(car.crashed, false);
   updateOvertaker(car, 0.05, 3, [obstacle], 23, -3);
   assert.equal(car.crashed, true);
+});
+
+test("cars and buses signal for a second before a single cut-in, then keep their lane", () => {
+  for (const type of ["car", "bus"]) {
+    const model = new THREE.Group();
+    if (type === "bus") model.userData.vehicleSize = { width: 2.35, depth: 7.5 };
+    const vehicle = createTrafficVehicle(model, type, () => 0);
+    model.position.set(-3, 0, -30);
+    updateLaneChange(vehicle, 0.25, 0, 3, []);
+    assert.equal(vehicle.maneuver.state, "warning");
+    assert.equal(model.position.x, -3);
+    updateLaneChange(vehicle, 0.25, 0, 3, []);
+    assert.ok(vehicle.indicators.some(lamp => lamp.visible));
+    updateLaneChange(vehicle, 0.5, 0, 3, []);
+    assert.equal(vehicle.maneuver.state, "turning");
+    assert.equal(model.position.x, -3);
+    updateLaneChange(vehicle, 0.85, 0, 3, []);
+    assert.equal(model.position.x, 0);
+    assert.equal(vehicle.maneuver.completed, true);
+    assert.ok(vehicle.indicators.every(lamp => !lamp.visible));
+    updateLaneChange(vehicle, 2, 3, 3, []);
+    assert.equal(model.position.x, 0);
+  }
+});
+
+test("cut-ins respect reserved escape lanes and cancel when their route becomes blocked", () => {
+  const vehicle = createTrafficVehicle(new THREE.Group(), "car", () => 0);
+  vehicle.object.position.set(-3, 0, -30);
+  updateLaneChange(vehicle, 0.1, 0, 3, [], 1);
+  assert.equal(vehicle.maneuver.state, "done");
+  assert.equal(vehicle.object.position.x, -3);
+  const another = createTrafficVehicle(new THREE.Group(), "car", () => 0);
+  another.object.position.set(-3, 0, -30);
+  updateLaneChange(another, 0.1, 0, 3, []);
+  updateLaneChange(another, 0.1, 0, 3, [roadObstacle(0, -30)]);
+  assert.equal(another.maneuver.state, "done");
+  assert.equal(another.object.position.x, -3);
+  assert.ok(another.indicators.every(lamp => !lamp.visible));
+});
+
+test("rear buses can cut in only after passing and use their full length for obstacle impacts", () => {
+  const model = new THREE.Group();
+  model.userData.vehicleSize = { width: 2.35, depth: 7.5 };
+  const bus = createOvertaker(model, { lane: 0, escapeLane: 1 });
+  bus.maneuver = { state: "waiting", elapsed: 0, targetLane: null, fromX: 0 };
+  updateOvertaker(bus, 0.05, 3, [], 23, 0);
+  assert.equal(bus.maneuver.state, "waiting");
+  bus.object.position.z = -10;
+  updateOvertaker(bus, 0.05, 3, [], 23, 0);
+  assert.equal(bus.maneuver.state, "warning");
+  assert.equal(bus.object.position.x, -3);
+  bus.object.position.set(-1.5, 0, 3);
+  bus.maneuver = { state: "turning", elapsed: 0.425, targetLane: 1, fromX: -3 };
+  updateOvertaker(bus, 0, 3, [roadObstacle(-1.5, -0.5)], 23, 0);
+  assert.equal(bus.crashed, true);
+  assert.equal(bus.maneuver.state, "done");
+  const stoppedX = bus.object.position.x;
+  updateLaneChange(bus, 0.5, 0, 3, []);
+  assert.equal(bus.object.position.x, stoppedX);
 });

@@ -2,7 +2,9 @@ import * as THREE from "three";
 import { getRunSpeed, chooseHazard, nextSpawnDelay, createRoadHazard, updateRoadHazard, collidesWithHazard, disposeRoadHazard, hazardCause } from "./road-hazards.js";
 import { GameAudio } from "./audio.js";
 import { createWeather, updateWeather, createRainVisuals, updateRainVisuals } from "./weather.js";
-import { planOvertake, createOvertaker, updateOvertaker } from "./traffic-events.js";
+import { planOvertake, createOvertaker, updateOvertaker, createTrafficVehicle, updateLaneChange } from "./traffic-events.js";
+import { createBus, createPatrol } from "./vehicle-models.js";
+import { createSignal, updateSignal, canAccelerate, drivingSpeed, createPursuit, updatePursuit } from "./intersection-events.js";
 
 const canvas = document.getElementById("game");
 const scoreElement = document.getElementById("score");
@@ -18,6 +20,9 @@ const gameInterface = document.getElementById("game-interface");
 const menuBest = document.getElementById("menu-best");
 const controlHint = document.getElementById("control-hint");
 const settingsStatus = document.getElementById("settings-status");
+const colorInput = document.getElementById("setting-color");
+const accelerateButton = document.getElementById("accelerate");
+const pursuitStatus = document.getElementById("pursuit-status");
 const settingInputs = {
   buttons: document.getElementById("setting-buttons"),
   music: document.getElementById("setting-music"),
@@ -29,6 +34,7 @@ const ROAD_SURFACE_Y = 0.04;
 const BEST_KEY = "hermosillo-drive-best";
 const SETTINGS_KEY = "bachenora-settings";
 let settings = { buttons: true, music: true, effects: true };
+let carColor = "#ed7848";
 try {
   const savedText = localStorage.getItem(SETTINGS_KEY);
   if (savedText !== null) {
@@ -38,6 +44,10 @@ try {
     for (const key of Object.keys(settings)) {
       if (typeof saved[key] !== "boolean") throw new Error(`Configuración no válida: ${key}`);
       restored[key] = saved[key];
+    }
+    if (saved.carColor !== undefined) {
+      if (typeof saved.carColor !== "string" || !/^#[0-9a-f]{6}$/i.test(saved.carColor)) throw new Error("Color guardado no válido.");
+      carColor = saved.carColor;
     }
     settings = restored;
   }
@@ -58,17 +68,21 @@ function applySettings() {
   for (const [key, input] of Object.entries(settingInputs)) input.checked = settings[key];
 }
 applySettings();
+colorInput.value = carColor;
+function saveSettings() {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...settings, carColor }));
+  } catch (error) {
+    console.warn("No se pudo guardar la configuración.", error);
+    settingsStatus.textContent = "Los cambios funcionan, pero no se pudieron guardar en este navegador.";
+    settingsStatus.hidden = false;
+  }
+}
 for (const [key, input] of Object.entries(settingInputs)) {
   input.addEventListener("change", () => {
     settings[key] = input.checked;
     applySettings();
-    try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-    } catch (error) {
-      console.warn("No se pudo guardar la configuración.", error);
-      settingsStatus.textContent = "Los cambios funcionan, pero no se pudieron guardar en este navegador.";
-      settingsStatus.hidden = false;
-    }
+    saveSettings();
   });
 }
 
@@ -134,8 +148,10 @@ function disk(parent, color, x, y, z, width, depth) {
 function createCar(color) {
   const car = new THREE.Group();
   disk(car, "#55564f", 0, ROAD_SURFACE_Y + 0.005, 0, 1.05, 2);
-  box(car, color, 0, 0.62, 0, 1.85, 0.65, 3.3);
-  box(car, color, 0, 1.14, 0.15, 1.55, 0.55, 1.8);
+  car.userData.paint = [
+    box(car, color, 0, 0.62, 0, 1.85, 0.65, 3.3),
+    box(car, color, 0, 1.14, 0.15, 1.55, 0.55, 1.8)
+  ];
   box(car, "#a9d8d3", 0, 1.18, 1.07, 1.35, 0.38, 0.04);
   box(car, "#a9d8d3", 0, 1.18, -0.77, 1.35, 0.38, 0.04);
   for (const side of [-1, 1]) {
@@ -243,10 +259,16 @@ for (let i = 0; i < 8; i++) {
   scene.add(mountain);
 }
 
-const player = createCar("#ed7848");
+const vehicleHelpers = { box, disk, material, createCar };
+const player = createCar(carColor);
 player.position.z = PLAYER_Z;
 scene.add(player);
 audio.setListener(player);
+colorInput.addEventListener("input", () => {
+  carColor = colorInput.value;
+  for (const mesh of player.userData.paint) mesh.material = material(carColor);
+  saveSettings();
+});
 
 let best = 0;
 try {
@@ -270,6 +292,49 @@ let weather = createWeather();
 let memeSpawned = false;
 let overtaker = null;
 let overtakeTimer = 8;
+let signal = null;
+let signalTimer = 4;
+let pursuit = null;
+let keyAccelerating = false;
+let touchAccelerating = false;
+
+function updateDrivingEvents(dt, speed) {
+  if (pursuit) {
+    updatePursuit(pursuit, dt, player.position.x, PLAYER_Z);
+    if (pursuit.remaining === 0) {
+      audio.stopEmitter(pursuit.object);
+      scene.remove(pursuit.object);
+      pursuit = null;
+    }
+  }
+  if (!signal && !pursuit) {
+    signalTimer -= dt;
+    if (signalTimer <= 0) {
+      signal = createSignal(getRunSpeed(distance), PLAYER_Z, vehicleHelpers);
+      scene.add(signal.object);
+    }
+  }
+  if (signal) {
+    if (updateSignal(signal, dt, speed, PLAYER_Z) === "violation") {
+      pursuit = createPursuit(createPatrol(vehicleHelpers), player.position.x, PLAYER_Z);
+      scene.add(pursuit.object);
+    }
+    if (signal.object.position.z > 30) {
+      scene.remove(signal.object);
+      signal = null;
+      signalTimer = 16 + Math.random() * 8;
+    }
+  }
+  const available = canAccelerate(signal);
+  accelerateButton.hidden = !available;
+  accelerateButton.setAttribute("aria-pressed", String(available && (keyAccelerating || touchAccelerating)));
+  accelerateButton.dataset.phase = signal?.phase ?? "";
+  const chasing = pursuit && pursuit.remaining > 0;
+  pursuitStatus.hidden = !chasing;
+  if (chasing) pursuitStatus.textContent = `PERSECUCIÓN · ${Math.ceil(pursuit.remaining)} s`;
+  camera.position.lerp(new THREE.Vector3(0, chasing ? 9 : 7.5, chasing ? 22 : 15), Math.min(1, dt * 4));
+  camera.lookAt(0, 0.5, -12);
+}
 
 function updateSky(dt, speed) {
   scene.background.copy(drySky).lerp(rainySky, weather.intensity);
@@ -312,6 +377,19 @@ function clearObstacles() {
     scene.remove(overtaker.object);
   }
   overtaker = null;
+  if (signal) scene.remove(signal.object);
+  signal = null;
+  if (pursuit) {
+    audio.stopEmitter(pursuit.object);
+    scene.remove(pursuit.object);
+  }
+  pursuit = null;
+  keyAccelerating = false;
+  touchAccelerating = false;
+  accelerateButton.hidden = true;
+  pursuitStatus.hidden = true;
+  camera.position.set(0, 7.5, 15);
+  camera.lookAt(0, 0.5, -12);
 }
 
 function start() {
@@ -327,6 +405,7 @@ function start() {
   weather = createWeather();
   memeSpawned = false;
   overtakeTimer = 6 + Math.random() * 5;
+  signalTimer = 4 + Math.random() * 3;
   updateSky(0, 0);
   spawnTimer = 0.8;
   lastTime = null;
@@ -360,6 +439,10 @@ function showMenu() {
 
 function finish(obstacleType) {
   playing = false;
+  keyAccelerating = false;
+  touchAccelerating = false;
+  accelerateButton.hidden = true;
+  pursuitStatus.hidden = true;
   audio.stop();
   audio.effect("crash");
   hideControlHint();
@@ -385,17 +468,19 @@ function finish(obstacleType) {
 }
 
 function update(dt) {
-  const speed = getRunSpeed(distance);
+  const baseSpeed = getRunSpeed(distance);
+  const speed = drivingSpeed(baseSpeed, keyAccelerating || touchAccelerating, signal);
   runTime += dt;
   const weatherTransition = updateWeather(weather, dt, runTime);
   if (weatherTransition === "started") memeSpawned = false;
   updateSky(dt, speed);
-  audio.tick(dt, weather.raining);
   distance += speed * dt;
   scoreElement.textContent = `${Math.floor(distance)} m`;
   const deltaX = LANES[lane] - player.position.x;
   player.position.x += deltaX * Math.min(1, dt * 10);
   player.rotation.z = -deltaX * 0.045;
+  updateDrivingEvents(dt, speed);
+  audio.tick(dt, weather.raining, pursuit && pursuit.remaining > 0 ? pursuit.object : null);
   for (const item of movingScenery) {
     item.object.position.z += speed * dt;
     if (item.object.position.z > 22) item.object.position.z -= item.length;
@@ -408,10 +493,10 @@ function update(dt) {
     const { type, firstLane } = chooseHazard(Math.random, weather.raining, reservedLane, memeAvailable);
     const colors = ["#7da9a2", "#dbbd8c", "#b98176", "#9397b1"];
     let obstacle;
-    if (type === "car") {
-      const object = createCar(colors[Math.floor(Math.random() * colors.length)]);
+    if (type === "car" || type === "bus") {
+      const object = type === "bus" ? createBus(vehicleHelpers) : createCar(colors[Math.floor(Math.random() * colors.length)]);
       object.position.x = LANES[firstLane];
-      obstacle = { object, type, active: true, width: 1.85, depth: 3.3, elapsed: 0, effects: {} };
+      obstacle = createTrafficVehicle(object, type);
     } else {
       obstacle = createRoadHazard(type, firstLane, { box, disk, material, createCar, createSpeechBubble });
     }
@@ -426,6 +511,8 @@ function update(dt) {
     const wasActive = obstacle.active;
     const wasForming = obstacle.eventTime !== null;
     updateRoadHazard(obstacle, dt, speed, PLAYER_Z);
+    const reservedLane = overtaker && overtaker.object.position.z > PLAYER_Z - 4 ? overtaker.escapeLane : null;
+    updateLaneChange(obstacle, dt, player.position.x, PLAYER_Z, obstacles, reservedLane, speed);
     if (obstacle.dynamic && !wasForming && obstacle.eventTime !== null && obstacle.effects.hinge) audio.effect("rattle", 0, obstacle.object);
     if (obstacle.dynamic && !wasActive && obstacle.active) {
       audio.effect(obstacle.effects.hole ? "collapse" : obstacle.type === "sewage" ? "overflow" : "open", 0, obstacle.object);
@@ -464,7 +551,7 @@ function update(dt) {
   if (!overtaker && overtakeTimer <= 0) {
     const plan = planOvertake(obstacles, PLAYER_Z, speed);
     if (plan) {
-      overtaker = createOvertaker(createCar("#658eb0"), plan);
+      overtaker = createOvertaker(Math.random() < 0.35 ? createBus(vehicleHelpers) : createCar("#658eb0"), plan);
       scene.add(overtaker.object);
       audio.effect("horn", 0, overtaker.object);
       if (Math.random() < 0.35) audio.playOvertakeVoice(1.6, Math.random, overtaker.object);
@@ -474,7 +561,7 @@ function update(dt) {
     }
   }
   if (overtaker) {
-    const passed = updateOvertaker(overtaker, dt, PLAYER_Z, obstacles, speed, player.position.x);
+    const passed = updateOvertaker(overtaker, dt, PLAYER_Z, obstacles, speed, player.position.x, 18 - (speed - baseSpeed));
     if (overtaker.crashed) {
       overtaker.type = "wreck";
       overtaker.elapsed = 0;
@@ -484,6 +571,11 @@ function update(dt) {
       overtaker = null;
     } else if (collidesWithHazard(overtaker, player.position.x, PLAYER_Z)) {
       finish("overtaker");
+    } else if (overtaker.maneuver?.completed) {
+      overtaker.type = overtaker.vehicleKind;
+      overtaker.lights.visible = false;
+      obstacles.push(overtaker);
+      overtaker = null;
     } else if (passed) {
       audio.stopEmitter(overtaker.object);
       scene.remove(overtaker.object);
@@ -506,11 +598,31 @@ document.getElementById("result-menu").addEventListener("click", showMenu);
 document.getElementById("left").addEventListener("click", () => move(-1));
 document.getElementById("right").addEventListener("click", () => move(1));
 document.addEventListener("keydown", event => {
+  if (playing && event.code === "Space") {
+    event.preventDefault();
+    keyAccelerating = true;
+  }
   if (playing && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
     event.preventDefault();
     if (!event.repeat) move(event.key === "ArrowLeft" ? -1 : 1);
   }
 });
+document.addEventListener("keyup", event => {
+  if (event.code === "Space") {
+    if (playing) event.preventDefault();
+    keyAccelerating = false;
+  }
+});
+accelerateButton.addEventListener("pointerdown", event => {
+  if (!playing || !canAccelerate(signal)) return;
+  event.preventDefault();
+  touchAccelerating = true;
+  accelerateButton.setPointerCapture(event.pointerId);
+});
+for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) {
+  accelerateButton.addEventListener(event, () => { touchAccelerating = false; });
+}
+window.addEventListener("blur", () => { keyAccelerating = false; touchAccelerating = false; });
 canvas.addEventListener("pointerdown", event => {
   touchStartX = event.clientX;
   canvas.setPointerCapture(event.pointerId);
@@ -525,6 +637,8 @@ canvas.addEventListener("pointerup", event => {
 canvas.addEventListener("pointercancel", () => { touchStartX = null; });
 document.addEventListener("visibilitychange", () => {
   lastTime = null;
+  keyAccelerating = false;
+  touchAccelerating = false;
   void audio.setVisible(!document.hidden);
 });
 requestAnimationFrame(frame);
