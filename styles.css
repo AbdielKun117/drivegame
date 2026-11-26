@@ -1,0 +1,89 @@
+* { box-sizing: border-box; }
+
+:root {
+  color-scheme: light;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #382d29;
+  background: #f8efe2;
+}
+
+body { margin: 0; overflow: hidden; }
+button { font: inherit; }
+button:focus-visible { outline: 3px solid #264c53; outline-offset: 3px; }
+[hidden] { display: none !important; }
+.game-shell { position: fixed; inset: 0; height: 100vh; height: 100dvh; overflow: hidden; }
+.game-area { position: absolute; inset: 0; background: #d3a579; }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.eyebrow { color: #c35c31; font-size: 10px; font-weight: 850; letter-spacing: .16em; margin: 0 0 10px; }
+h1 { font-size: clamp(38px, 7vw, 68px); letter-spacing: -.06em; line-height: 1; margin: 0; }
+h1 span { color: #e5713f; }
+.main-menu, .overlay {
+  position: absolute; inset: 0; z-index: 3; display: grid; place-items: center;
+  overflow: auto;
+  padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  background: #38292280;
+}
+.main-menu { background: radial-gradient(circle at 30% 20%, #ffe2b3ed, #d6a579f5); }
+.menu-backdrop { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.sonora-silhouette {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(120vw, 1000px); height: 95vh; height: 95dvh; object-fit: contain; opacity: .65;
+}
+.menu-card { position: relative; width: min(100%, 440px); padding: clamp(24px, 5vw, 44px); border-radius: 24px; background: #fffaf2f2; text-align: center; box-shadow: 0 18px 60px #38292230; }
+.subtitle { color: #857168; font-size: 15px; line-height: 1.6; margin: 20px 0; }
+.menu-record { color: #907c6c; font-size: 12px; margin: 0 0 22px; }
+.menu-record strong { display: block; font-size: 24px; color: #382d29; margin-top: 3px; }
+.menu-card .start-button { width: 100%; padding: 16px 22px; }
+.menu-instructions { color: #907c6c; font-size: 12px; line-height: 1.5; margin: 20px 0; }
+.settings { margin-top: 16px; text-align: left; border: 1px solid #eadbcc; border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+.settings summary { cursor: pointer; color: #745f52; font-weight: 750; min-height: 24px; }
+.settings label { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+.settings input { width: 20px; height: 20px; accent-color: #e87543; cursor: pointer; }
+#settings-status { font-size: 12px; color: #a8462e; line-height: 1.4; }
+.direction-buttons-hidden .direction { background: transparent; border-color: transparent; color: transparent; box-shadow: none; }
+.direction-buttons-hidden .direction:active { background: transparent; }
+.main-menu { align-items: safe center; }
+.game-top {
+  position: absolute; top: max(16px, env(safe-area-inset-top)); left: max(16px, env(safe-area-inset-left)); right: max(16px, env(safe-area-inset-right));
+  display: flex; align-items: center; gap: 24px; padding: 12px 18px; border-radius: 14px; background: #fffaf2eb;
+}
+.game-top strong, .stat-label { display: block; }
+.game-top strong { font-size: 20px; line-height: 1.1; }
+.stat-label { color: #a38e80; font-size: 9px; font-weight: 800; letter-spacing: .12em; margin-bottom: 4px; }
+.best { margin-left: auto; text-align: right; }
+.road-name { color: #907c6c; font-size: 9px; font-weight: 800; letter-spacing: .1em; }
+.road-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #e67c4a; margin-right: 4px; }
+.overlay-card { width: min(100%, 340px); padding: 28px 24px; text-align: center; background: #fffaf2; border-radius: 18px; box-shadow: 0 12px 40px #2b1d1b40; }
+.overlay-card h2 { font-size: 32px; letter-spacing: -.05em; margin: 5px 0 8px; }
+.overlay-card p:not(.eyebrow) { color: #857168; font-size: 14px; line-height: 1.5; margin: 0 0 20px; }
+.overlay-card .menu-button { display: block; margin: 12px auto 0; }
+.start-button { border: 0; border-radius: 10px; padding: 12px 22px; background: #e87543; color: white; font-weight: 800; cursor: pointer; min-height: 44px; }
+.start-button span { margin-left: 12px; }
+.menu-button { border: 1px solid #eadbcc; border-radius: 10px; padding: 10px 14px; min-height: 44px; background: #fffaf2; color: #5a4940; cursor: pointer; }
+.controls {
+  position: absolute; bottom: max(16px, env(safe-area-inset-bottom)); left: max(16px, env(safe-area-inset-left)); right: max(16px, env(safe-area-inset-right));
+  display: flex; align-items: center; justify-content: space-between; pointer-events: none;
+}
+.direction { width: 64px; height: 56px; border: 1px solid #eadbcc; border-radius: 14px; background: #fffaf2e8; color: #5a4940; font-size: 28px; cursor: pointer; touch-action: manipulation; pointer-events: auto; }
+.direction:active { background: #fce5d2; }
+.control-hint { display: grid; text-align: center; color: #745f52; font-size: 11px; gap: 3px; padding: 10px 16px; border-radius: 10px; background: #fffaf2df; }
+.control-hint strong { font-size: 9px; letter-spacing: .12em; }
+footer { color: #b19d8d; font-size: 9px; font-weight: 800; letter-spacing: .15em; text-align: center; }
+footer span { color: #e87543; padding: 0 5px; }
+@media (max-width: 600px) {
+  .road-name { display: none; }
+  .game-top { gap: 12px; padding: 10px 12px; }
+  .game-top strong { font-size: 18px; }
+  .control-hint { font-size: 10px; padding: 8px; }
+}
+@media (max-height: 500px) {
+  .menu-card { padding: 18px 24px; }
+  h1 { font-size: 36px; }
+  h1 span { display: inline; }
+  .subtitle { margin: 10px 0; font-size: 13px; }
+  .menu-record { margin-bottom: 10px; }
+  .menu-record strong { display: inline; margin-left: 8px; font-size: 18px; }
+  .menu-instructions { margin: 10px 0; }
+  .overlay-card { padding: 18px 24px; }
+  .control-hint { display: none; }
+}

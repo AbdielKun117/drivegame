@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e78b4b">
+  <title>Bachenora</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="game.js"></script>
+</head>
+<body>
+  <main>
+    <section class="game-shell" aria-label="Juego Bachenora">
+      <div class="game-area">
+        <canvas id="game" width="480" height="720" aria-label="Carretera de tres carriles"></canvas>
+        <section class="main-menu" id="main-menu" aria-labelledby="menu-title">
+          <div class="menu-backdrop" aria-hidden="true">
+            <img class="sonora-silhouette" src="assets/sonora.svg" alt="">
+          </div>
+          <div class="menu-card">
+            <p class="eyebrow">UN PASEO POR EL DESIERTO</p>
+            <h1 id="menu-title">Bache<span>nora</span></h1>
+            <p class="subtitle">Esquiva el tráfico y sobrevive a los baches en un recorrido por el desierto.</p>
+            <p class="menu-record">Tu récord <strong id="menu-best">0 m</strong></p>
+            <button class="start-button" id="play" type="button">Jugar <span aria-hidden="true">→</span></button>
+            <details class="settings">
+              <summary>Configuración</summary>
+              <label><span>Mostrar botones laterales</span><input id="setting-buttons" type="checkbox" checked></label>
+              <label><span>Música</span><input id="setting-music" type="checkbox" checked></label>
+              <label><span>Efectos de sonido</span><input id="setting-effects" type="checkbox" checked></label>
+              <p id="settings-status" role="status" hidden></p>
+            </details>
+            <p class="menu-instructions">Usa las flechas del teclado o desliza en la pantalla para cambiar de carril.</p>
+            <footer>HECHO PARA RODAR <span>✦</span> PROTOTIPO 3D</footer>
+          </div>
+        </section>
+        <div id="game-interface" hidden>
+          <div class="game-top">
+            <div><span class="stat-label">RECORRIDO</span><strong id="score">0 m</strong></div>
+            <div class="road-name"><span class="road-dot"></span> HERMOSILLO, SONORA</div>
+            <div class="best"><span class="stat-label">RÉCORD</span><strong id="best">0 m</strong></div>
+            <button class="menu-button" id="back-menu" type="button">Menú</button>
+          </div>
+          <div class="controls">
+            <button id="left" class="direction" type="button" aria-label="Mover a la izquierda">←</button>
+            <div class="control-hint" id="control-hint" hidden><strong>CONTROLES</strong><span>Desliza o usa las flechas</span></div>
+            <button id="right" class="direction" type="button" aria-label="Mover a la derecha">→</button>
+          </div>
+        </div>
+        <div class="overlay" id="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="overlay-title" aria-describedby="overlay-text">
+          <div class="overlay-card">
+            <p class="eyebrow" id="overlay-kicker">FIN DEL RECORRIDO</p>
+            <h2 id="overlay-title">¡Chocaste!</h2>
+            <p id="overlay-text"></p>
+            <button class="start-button" id="start" type="button">Volver a jugar <span aria-hidden="true">→</span></button>
+            <button class="menu-button" id="result-menu" type="button">Menú principal</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
