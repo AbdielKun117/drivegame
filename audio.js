@@ -6,6 +6,7 @@ const RECORDINGS = {
   rattle: new URL("./assets/audio/manhole-rattle.mp3", import.meta.url).href,
   collapse: new URL("./assets/audio/collapse.mp3", import.meta.url).href,
   driving: new URL("./assets/audio/driving-music.mp3", import.meta.url).href,
+  regional: new URL("./assets/audio/regional-music.mp3", import.meta.url).href,
   chase: new URL("./assets/audio/chase-music.mp3", import.meta.url).href,
   siren: new URL("./assets/audio/police-siren.mp3", import.meta.url).href,
   "voice-1": new URL("./assets/audio/voice-1.mp3", import.meta.url).href,
@@ -26,6 +27,15 @@ const VOICES = [
   { name: "voice-6", duration: 1.72 }
 ];
 const OVERTAKE_VOICES = ["overtake-voice-1", "overtake-voice-2"];
+// Preserve the original tune's level on the recorded-music bus.
+const ORIGINAL_MUSIC_VOLUME = 0.09 / 0.16;
+// Match the quieter polka recording to Driving without raising the shared music bus.
+const REGIONAL_MUSIC_VOLUME = 2.3;
+export const RADIO_STATIONS = [
+  { id: "regional", label: "Regional" },
+  { id: "original", label: "Original" },
+  { id: "driving", label: "Driving" }
+];
 
 export class GameAudio {
   constructor(onError) {
@@ -34,6 +44,9 @@ export class GameAudio {
     this.context = null;
     this.playing = false;
     this.music = null;
+    this.station = RADIO_STATIONS[0].id;
+    this.beat = 0;
+    this.beatTimer = 0;
     this.musicSources = new Set();
     this.siren = null;
     this.buffers = new Map();
@@ -48,6 +61,13 @@ export class GameAudio {
 
   setListener(listener) {
     this.listener = listener;
+  }
+
+  setStation(station) {
+    if (!RADIO_STATIONS.some(candidate => candidate.id === station)) {
+      throw new Error(`Estación de radio desconocida: ${station}`);
+    }
+    this.station = station;
   }
 
   proximityVolume(emitter) {
@@ -186,20 +206,40 @@ export class GameAudio {
   }
 
   updateMusic(emitter) {
-    const name = emitter ? "chase" : "driving";
-    if (!this.settings.music || !this.buffers.has(name) || this.music?.name === name) return;
+    const name = emitter ? "chase" : this.station;
+    if (!this.settings.music || (name !== "original" && !this.buffers.has(name)) || this.music?.name === name) return;
     const time = this.context.currentTime;
-    if (this.music) {
+    if (this.music?.source) {
       const parameter = this.music.gain.gain;
       parameter.cancelScheduledValues(time);
       parameter.setValueAtTime(parameter.value, time);
       parameter.linearRampToValueAtTime(0, time + 0.3);
       this.music.source.stop(time + 0.3);
+    } else if (this.music) {
+      this.stopMusic();
+    }
+    if (name === "original") {
+      this.music = { name, source: null, gain: null };
+      this.beat = 0;
+      this.beatTimer = 0;
+      return;
     }
     const music = this.recording(name, 0, true, 0, null, this.musicBus);
     music.gain.gain.setValueAtTime(0, time);
-    music.gain.gain.linearRampToValueAtTime(name === "chase" ? 1.2 : 0.85, time + 0.4);
+    const volume = name === "chase" ? 1.2 : name === "regional" ? REGIONAL_MUSIC_VOLUME : 0.85;
+    music.gain.gain.linearRampToValueAtTime(volume, time + 0.4);
     this.music = { ...music, name };
+  }
+
+  playOriginal(dt) {
+    this.beatTimer -= dt;
+    if (this.beatTimer > 0) return;
+    const melody = [60, 64, 67, 69, 67, 64, 62, 64, 57, 60, 64, 67, 64, 60, 59, 62];
+    const midi = melody[this.beat % melody.length];
+    this.tone(440 * 2 ** ((midi - 69) / 12), 0.18, 0.65 * ORIGINAL_MUSIC_VOLUME, this.musicBus);
+    if (this.beat % 4 === 0) this.tone(this.beat % 16 < 8 ? 130.81 : 110, 0.35, 0.5 * ORIGINAL_MUSIC_VOLUME, this.musicBus, "sine");
+    this.beat++;
+    this.beatTimer = 0.23;
   }
 
   async recordedEffect(name, delay = 0, emitter = null) {
@@ -280,6 +320,7 @@ export class GameAudio {
       parameter.linearRampToValueAtTime(this.proximityVolume(sound.emitter), time + 0.05);
     }
     this.updateMusic(pursuitEmitter);
+    if (this.music?.name === "original" && !pursuitEmitter) this.playOriginal(dt);
     if (pursuitEmitter && this.settings.effects && this.buffers.has("siren") && this.siren?.emitter !== pursuitEmitter) {
       this.siren?.source.stop();
       this.siren = { ...this.recording("siren", 4, true, 0, pursuitEmitter), emitter: pursuitEmitter };

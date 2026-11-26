@@ -19,6 +19,7 @@ function audioFixture(t, fetchRecording = async url => ({
         value: 0,
         setValueAtTime(value) { this.value = value; },
         linearRampToValueAtTime(value) { this.value = value; },
+        exponentialRampToValueAtTime(value) { this.value = value; },
         cancelScheduledValues() {}
       };
       return { gain: parameter, connect() {}, disconnect() {} };
@@ -33,6 +34,11 @@ function audioFixture(t, fetchRecording = async url => ({
         stop(time) { this.stopTime = time; this.stopped = true; this.onended?.(); }
       };
       this.sources.push(source);
+      return source;
+    }
+    createOscillator() {
+      const source = this.createBufferSource();
+      source.frequency = { setValueAtTime() {}, exponentialRampToValueAtTime() {} };
       return source;
     }
   }
@@ -166,6 +172,7 @@ test("an emitter removed during loading cannot play a delayed ghost sound", asyn
 test("recorded music changes for pursuit independently of the siren and effects mute", async t => {
   const { audio, errors } = audioFixture(t);
   audio.setSettings({ music: true, effects: true });
+  audio.setStation("driving");
   await audio.start();
   audio.tick(0.05, false);
   const normal = audio.music.source;
@@ -190,6 +197,44 @@ test("recorded music changes for pursuit independently of the siren and effects 
   assert.equal(audio.music, null);
   audio.tick(0.05, false, patrol);
   assert.ok(audio.siren);
+  audio.stop();
+  assert.ok(audio.context.sources.every(source => source.stopped));
+  assert.deepEqual(errors, []);
+});
+
+test("radio defaults to regional, preserves both previous tunes, and resumes the selection after a pursuit", async t => {
+  const { audio, errors } = audioFixture(t);
+  audio.setSettings({ music: true, effects: true });
+  await audio.start();
+  audio.tick(0.05, false);
+  assert.equal(audio.station, "regional");
+  const regional = audio.music.source;
+  assert.ok(regional.buffer.url.endsWith("regional-music.mp3"));
+  const regionalVolume = audio.music.gain.gain.value;
+  const musicBusVolume = audio.musicBus.gain.value;
+  const effectsBusVolume = audio.effectsBus.gain.value;
+  audio.setStation("original");
+  audio.tick(0.05, false);
+  assert.ok(regional.stopped);
+  assert.equal(audio.music.name, "original");
+  assert.ok(audio.context.sources.some(source => source.type === "triangle" && source.started));
+  audio.setStation("driving");
+  audio.tick(0.05, false);
+  assert.ok(audio.music.source.buffer.url.endsWith("driving-music.mp3"));
+  assert.ok(regionalVolume > audio.music.gain.gain.value * 2.5);
+  assert.equal(audio.musicBus.gain.value, musicBusVolume);
+  assert.equal(audio.effectsBus.gain.value, effectsBusVolume);
+  const patrol = { position: { x: 0, y: 0, z: 8 } };
+  audio.tick(0.05, false, patrol);
+  const danger = audio.music.source;
+  audio.setStation("regional");
+  audio.tick(0.05, false, patrol);
+  assert.equal(audio.music.source, danger);
+  audio.tick(0.05, false);
+  assert.ok(audio.music.source.buffer.url.endsWith("regional-music.mp3"));
+  assert.equal(audio.music.gain.gain.value, regionalVolume);
+  assert.throws(() => audio.setStation("unknown"), /Estación de radio desconocida/);
+  assert.equal(audio.station, "regional");
   audio.stop();
   assert.ok(audio.context.sources.every(source => source.stopped));
   assert.deepEqual(errors, []);

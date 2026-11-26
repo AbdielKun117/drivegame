@@ -40,6 +40,7 @@ h1 span { color: #e5713f; }
 .settings label { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
 .settings input { width: 20px; height: 20px; accent-color: #e87543; cursor: pointer; }
 .settings input[type="color"] { width: 48px; height: 36px; padding: 2px; border: 1px solid #eadbcc; border-radius: 6px; background: #fffaf2; }
+.settings select { font: inherit; min-height: 44px; max-width: 55%; padding: 6px 10px; border: 1px solid #eadbcc; border-radius: 6px; background: #fffaf2; color: #5a4940; }
 #settings-status { font-size: 12px; color: #a8462e; line-height: 1.4; }
 .audio-credits { font-size: 11px; line-height: 1.5; color: #907c6c; }
 .audio-credits a { color: #745f52; }
@@ -74,7 +75,9 @@ h1 span { color: #e5713f; }
 .accelerate small { display: block; font-size: 10px; font-weight: 600; }
 .accelerate[data-phase="yellow"] { background: #ffd45c; color: #594516; }
 .accelerate[aria-pressed="true"] { box-shadow: 0 0 0 4px #ffffff70; transform: scale(.96); }
-.pursuit-status { position: absolute; top: max(90px, calc(env(safe-area-inset-top) + 80px)); left: 50%; transform: translateX(-50%); border-radius: 10px; padding: 8px 14px; background: #9f203de8; color: white; font-size: 12px; font-weight: 850; white-space: nowrap; pointer-events: none; }
+.drive-status { position: absolute; top: max(90px, calc(env(safe-area-inset-top) + 80px)); left: max(16px, env(safe-area-inset-left)); right: max(16px, env(safe-area-inset-right)); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; pointer-events: none; }
+.radio-button { min-height: 44px; border: 1px solid #eadbcc; border-radius: 10px; padding: 8px 12px; background: #fffaf2eb; color: #5a4940; font-size: 11px; font-weight: 800; cursor: pointer; pointer-events: auto; }
+.pursuit-status { margin-left: auto; border-radius: 10px; padding: 8px 14px; background: #9f203de8; color: white; font-size: 12px; font-weight: 850; white-space: nowrap; pointer-events: none; }
 .control-hint { display: grid; text-align: center; color: #745f52; font-size: 11px; gap: 3px; padding: 10px 16px; border-radius: 10px; background: #fffaf2df; }
 .control-hint strong { font-size: 9px; letter-spacing: .12em; }
 footer { color: #b19d8d; font-size: 9px; font-weight: 800; letter-spacing: .15em; text-align: center; }

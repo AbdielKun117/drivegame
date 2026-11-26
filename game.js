@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { getRunSpeed, chooseHazard, nextSpawnDelay, createRoadHazard, updateRoadHazard, collidesWithHazard, disposeRoadHazard, hazardCause } from "./road-hazards.js";
-import { GameAudio } from "./audio.js";
+import { GameAudio, RADIO_STATIONS } from "./audio.js";
 import { createWeather, updateWeather, createRainVisuals, updateRainVisuals } from "./weather.js";
 import { planOvertake, createOvertaker, updateOvertaker, createTrafficVehicle, updateLaneChange } from "./traffic-events.js";
 import { createBus, createPatrol } from "./vehicle-models.js";
@@ -21,6 +21,8 @@ const menuBest = document.getElementById("menu-best");
 const controlHint = document.getElementById("control-hint");
 const settingsStatus = document.getElementById("settings-status");
 const colorInput = document.getElementById("setting-color");
+const radioInput = document.getElementById("setting-radio");
+const radioButton = document.getElementById("radio-next");
 const accelerateButton = document.getElementById("accelerate");
 const pursuitStatus = document.getElementById("pursuit-status");
 const settingInputs = {
@@ -35,6 +37,7 @@ const BEST_KEY = "hermosillo-drive-best";
 const SETTINGS_KEY = "bachenora-settings";
 let settings = { buttons: true, music: true, effects: true };
 let carColor = "#ed7848";
+let station = RADIO_STATIONS[0].id;
 try {
   const savedText = localStorage.getItem(SETTINGS_KEY);
   if (savedText !== null) {
@@ -49,6 +52,10 @@ try {
       if (typeof saved.carColor !== "string" || !/^#[0-9a-f]{6}$/i.test(saved.carColor)) throw new Error("Color guardado no válido.");
       carColor = saved.carColor;
     }
+    if (saved.station !== undefined) {
+      if (!RADIO_STATIONS.some(candidate => candidate.id === saved.station)) throw new Error("Estación guardada no válida.");
+      station = saved.station;
+    }
     settings = restored;
   }
 } catch (error) {
@@ -61,17 +68,21 @@ const audio = new GameAudio(error => {
   settingsStatus.textContent = "No se pudo cargar o reproducir un sonido. Comprueba la conexión y los permisos de audio.";
   settingsStatus.hidden = false;
 });
+for (const candidate of RADIO_STATIONS) radioInput.add(new Option(candidate.label, candidate.id));
 
 function applySettings() {
   document.body.classList.toggle("direction-buttons-hidden", !settings.buttons);
   audio.setSettings(settings);
+  audio.setStation(station);
+  radioInput.value = station;
+  radioButton.textContent = `Radio · ${RADIO_STATIONS.find(candidate => candidate.id === station).label}`;
   for (const [key, input] of Object.entries(settingInputs)) input.checked = settings[key];
 }
 applySettings();
 colorInput.value = carColor;
 function saveSettings() {
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...settings, carColor }));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...settings, carColor, station }));
   } catch (error) {
     console.warn("No se pudo guardar la configuración.", error);
     settingsStatus.textContent = "Los cambios funcionan, pero no se pudieron guardar en este navegador.";
@@ -85,6 +96,18 @@ for (const [key, input] of Object.entries(settingInputs)) {
     saveSettings();
   });
 }
+radioInput.addEventListener("change", () => {
+  station = radioInput.value;
+  applySettings();
+  saveSettings();
+});
+radioButton.addEventListener("click", () => {
+  const index = RADIO_STATIONS.findIndex(candidate => candidate.id === station);
+  station = RADIO_STATIONS[(index + 1) % RADIO_STATIONS.length].id;
+  applySettings();
+  saveSettings();
+  radioButton.blur();
+});
 
 let renderer;
 try {
@@ -598,7 +621,7 @@ document.getElementById("result-menu").addEventListener("click", showMenu);
 document.getElementById("left").addEventListener("click", () => move(-1));
 document.getElementById("right").addEventListener("click", () => move(1));
 document.addEventListener("keydown", event => {
-  if (playing && event.code === "Space") {
+  if (playing && event.code === "Space" && event.target !== radioButton) {
     event.preventDefault();
     keyAccelerating = true;
   }
@@ -609,7 +632,7 @@ document.addEventListener("keydown", event => {
 });
 document.addEventListener("keyup", event => {
   if (event.code === "Space") {
-    if (playing) event.preventDefault();
+    if (playing && event.target !== radioButton) event.preventDefault();
     keyAccelerating = false;
   }
 });

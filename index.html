@@ -27,10 +27,12 @@
               <label><span>Color de tu carro</span><input id="setting-color" type="color" value="#ed7848"></label>
               <label><span>Mostrar botones laterales</span><input id="setting-buttons" type="checkbox" checked></label>
               <label><span>Música</span><input id="setting-music" type="checkbox" checked></label>
+              <label><span>Estación de radio</span><select id="setting-radio"></select></label>
               <label><span>Efectos de sonido</span><input id="setting-effects" type="checkbox" checked></label>
               <p class="audio-credits">Claxon: <a href="https://freesound.org/people/etcd_09/sounds/435497/" target="_blank" rel="noopener noreferrer">Elena Teresa (etcd_09)</a>, <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener noreferrer">CC BY 3.0</a>.</p>
               <p class="audio-credits">Tapa de alcantarilla: <a href="https://freesound.org/people/alexarje/sounds/863134/" target="_blank" rel="noopener noreferrer">alexarje</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a> (fragmentos recortados con entrada y salida gradual).</p>
               <p class="audio-credits">Música: «<a href="https://opengameart.org/content/driving-0" target="_blank" rel="noopener noreferrer">Driving (remastered)</a>», jeffmatthews410, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>. Persecución: «<a href="https://opengameart.org/content/determined-pursuit-epic-orchestra-loop" target="_blank" rel="noopener noreferrer">Determined Pursuit</a>», Emma_MA, CC0. Sirena real: <a href="https://freesound.org/people/conleec/sounds/159752/" target="_blank" rel="noopener noreferrer">conleec</a>, CC0.</p>
+              <p class="audio-credits">Radio Regional: «<a href="https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100253" target="_blank" rel="noopener noreferrer">Double Polka</a>», Kevin MacLeod (incompetech.com), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>. Polca instrumental con acordeón, tuba y batería.</p>
               <p id="settings-status" role="status" hidden></p>
             </details>
             <p class="menu-instructions">Usa las flechas o desliza para cambiar de carril. En los semáforos, mantén Espacio o Acelerar para pasar antes del rojo.</p>
@@ -44,7 +46,10 @@
             <div class="best"><span class="stat-label">RÉCORD</span><strong id="best">0 m</strong></div>
             <button class="menu-button" id="back-menu" type="button">Menú</button>
           </div>
-          <div id="pursuit-status" class="pursuit-status" role="status" hidden></div>
+          <div class="drive-status">
+            <button id="radio-next" class="radio-button" type="button" aria-label="Cambiar estación de radio">Radio · Regional</button>
+            <div id="pursuit-status" class="pursuit-status" role="status" hidden></div>
+          </div>
           <div class="controls">
             <button id="left" class="direction" type="button" aria-label="Mover a la izquierda">←</button>
             <div class="drive-actions">
