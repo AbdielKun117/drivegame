@@ -35,16 +35,16 @@ const helpers = {
 
 test("random selection covers every hazard and always reserves a lane", () => {
   const types = new Set();
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 9; i++) {
     for (const laneRoll of [0, 0.5, 0.999]) {
-      const rolls = [(i + 0.5) / 8, laneRoll];
+      const rolls = [(i + 0.5) / 9, laneRoll];
       const hazard = chooseHazard(() => rolls.shift());
       types.add(hazard.type);
       assert.ok(hazard.span < 3);
       assert.ok(hazard.firstLane >= 0 && hazard.firstLane + hazard.span <= 3);
     }
   }
-  assert.deepEqual([...types], ["pothole", "wide-pothole", "sinkhole", "manhole", "sewage", "car", "closed-manhole"]);
+  assert.deepEqual([...types], ["pothole", "wide-pothole", "sinkhole", "manhole", "sewage", "car", "closed-manhole", "stuck-car-dry"]);
 });
 
 test("two-lane damage hits both occupied lanes but never the free lane", () => {
@@ -247,4 +247,16 @@ test("spawning preserves the escape lane during an overtake in dry and wet weath
       }
     }
   }
+});
+
+test("dry weather can produce a smoking car trapped in a pothole", () => {
+  const selected = chooseHazard(() => 0.99, false);
+  assert.equal(selected.type, "stuck-car-dry");
+  const hazard = createRoadHazard(selected.type, selected.firstLane, helpers, () => 0.5);
+  hazard.object.position.z = 3;
+  const smokeBefore = hazard.effects.smoke.children[0].position.y;
+  updateRoadHazard(hazard, 0.5, MAX_SPEED, 3);
+  assert.notEqual(hazard.effects.smoke.children[0].position.y, smokeBefore);
+  assert.equal(collidesWithHazard(hazard, hazard.object.position.x, 3), true);
+  disposeRoadHazard(hazard);
 });

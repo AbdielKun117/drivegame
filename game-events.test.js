@@ -54,3 +54,79 @@ test("a rear car illuminates its lane before reaching the player and moves forwa
   assert.equal(car.lights.visible, false);
   assert.equal(updateOvertaker(car, 10, 3), true);
 });
+
+function roadObstacle(x, z, width = 2.5, active = true) {
+  const obstacle = { object: new THREE.Group(), active, width, depth: 2.3 };
+  obstacle.object.position.set(x, 0, z);
+  return obstacle;
+}
+
+test("a passing car changes lane early enough to avoid a visible obstacle", () => {
+  const car = createOvertaker(new THREE.Group(), { lane: 1, escapeLane: 0 });
+  car.object.position.z = -2;
+  const obstacle = roadObstacle(0, -30);
+  for (let i = 0; i < 80; i++) {
+    obstacle.object.position.z += 23 / 60;
+    updateOvertaker(car, 1 / 60, 3, [obstacle], 23, 0);
+    assert.equal(car.crashed, false);
+  }
+  assert.notEqual(car.targetLane, 1);
+  assert.ok(Math.abs(car.object.position.x) > 2.8);
+  assert.ok(car.object.position.z < obstacle.object.position.z);
+});
+
+test("an obstacle that appears too close causes a stopped, smoking car", () => {
+  const car = createOvertaker(new THREE.Group(), { lane: 1, escapeLane: 0 });
+  car.object.position.z = 3;
+  const obstacle = roadObstacle(0, -6);
+  for (let i = 0; i < 20 && !car.crashed; i++) {
+    obstacle.object.position.z += 23 / 60;
+    updateOvertaker(car, 1 / 60, 3, [obstacle], 23, -3);
+  }
+  assert.equal(car.crashed, true);
+  assert.equal(car.lights.visible, false);
+  assert.ok(car.effects.smoke.visible);
+  assert.ok(car.effects.smoke.children.length > 0);
+  const stoppedZ = car.object.position.z;
+  updateOvertaker(car, 1, 3, [obstacle], 23, -3);
+  assert.equal(car.object.position.z, stoppedZ);
+});
+
+test("a car cannot evade into blocked lanes or the player's escape lane during a pass", () => {
+  const car = createOvertaker(new THREE.Group(), { lane: 1, escapeLane: 0 });
+  car.object.position.z = 3;
+  const obstacles = [roadObstacle(0, -30), roadObstacle(3, -30)];
+  for (let i = 0; i < 80 && !car.crashed; i++) {
+    for (const obstacle of obstacles) obstacle.object.position.z += 23 / 60;
+    updateOvertaker(car, 1 / 60, 3, obstacles, 23, -3);
+  }
+  assert.equal(car.crashed, true);
+  assert.equal(car.targetLane, 1);
+});
+
+test("passing cars cross harmless puddles and closed lids without crashing", () => {
+  const car = createOvertaker(new THREE.Group(), { lane: 1, escapeLane: 0 });
+  car.object.position.z = 3;
+  const harmless = roadObstacle(0, -6, 2.8, false);
+  for (let i = 0; i < 30; i++) {
+    harmless.object.position.z += 23 / 60;
+    updateOvertaker(car, 1 / 60, 3, [harmless], 23, -3);
+  }
+  assert.equal(car.crashed, false);
+  assert.equal(car.targetLane, 1);
+});
+
+test("a cover that suddenly opens beside a passing car can cause a crash", () => {
+  const car = createOvertaker(new THREE.Group(), { lane: 1, escapeLane: 0 });
+  car.object.position.z = 3;
+  const obstacle = roadObstacle(0, -2, 2.2, false);
+  obstacle.dynamic = true;
+  obstacle.eventTime = null;
+  updateOvertaker(car, 0.05, 3, [obstacle], 23, -3);
+  assert.equal(car.crashed, false);
+  assert.equal(car.targetLane, 1);
+  obstacle.active = true;
+  obstacle.eventTime = 0.6;
+  updateOvertaker(car, 0.1, 3, [obstacle], 23, -3);
+  assert.equal(car.crashed, true);
+});

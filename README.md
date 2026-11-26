@@ -33,7 +33,8 @@ Abre la dirección local que muestra Vite. El juego no se ejecuta abriendo `inde
 - La velocidad aumenta con el recorrido hasta alcanzar su límite a los 1,400 metros. La frecuencia de objetos sube progresivamente de uno cada 1.6 segundos a uno cada 0.7 segundos, sin aumentar indefinidamente.
 - Los socavones empiezan a agrietarse a menos de un segundo de llegar al carro; las tapas peligrosas comienzan a moverse aproximadamente 1.25 segundos antes. No hay avisos en pantalla.
 - **Lluvia:** aparece aleatoriamente, oscurece el cielo y dura entre 10 y 32 segundos según el tiempo de partida. Durante ella aumentan los charcos, los socavones inundados y los desbordamientos. Los charcos sin burbujas son transitables; los que burbujean esconden un bache mortal. También hay carros atrapados que debes esquivar.
-- **Rebases:** en cualquier clima pueden acercarse carros desde atrás. Su claxon y las luces reflejadas sobre el carril permiten apartarte antes de que pasen. Si desactivas los efectos no sonará el claxon, pero las luces permanecen. Se reserva un carril de escape para evitar bloqueos completos.
+- **Carros atrapados:** también aparecen en clima seco, hundidos en baches y echando humo; durante la lluvia se quedan en charcos.
+- **Rebases:** en cualquier clima pueden acercarse carros desde atrás. Su claxon y las luces reflejadas sobre el carril permiten apartarte antes de que pasen. Si desactivas los efectos no sonará el claxon, pero las luces permanecen. Se reserva un carril de escape para evitar bloqueos completos. Los carros intentan esquivar obstáculos visibles sin invadir tu carril mientras pasan; si el peligro está demasiado cerca o no pueden desviarse, chocan y quedan como obstáculos detenidos que echan humo.
 
 ## Audio
 

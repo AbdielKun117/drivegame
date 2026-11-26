@@ -1,11 +1,12 @@
 import * as THREE from "three";
+import { createSmoke, updateSmoke } from "./vehicle-effects.js";
 
 export const MAX_SPEED = 42;
 const START_SPEED = 23;
 const EVENT_TRIGGER_SECONDS = 1.25;
 const ACTIVATION_DELAY = 0.55;
 const SURFACE_Y = 0.04;
-const HAZARD_TYPES = ["pothole", "wide-pothole", "sinkhole", "manhole", "sewage", "car", "car", "closed-manhole"];
+const HAZARD_TYPES = ["pothole", "wide-pothole", "sinkhole", "manhole", "sewage", "car", "car", "closed-manhole", "stuck-car-dry"];
 const RAIN_HAZARDS = ["puddle", "puddle", "puddle-hole", "flooded-sinkhole", "flooded-sinkhole", "sewage", "sewage", "stuck-car", "car", "closed-manhole"];
 const DETAILS = {
   pothole: { width: 2.5, depth: 2.3, cause: "Caíste en un bache." },
@@ -19,6 +20,8 @@ const DETAILS = {
   "puddle-hole": { width: 2.8, depth: 3.8, cause: "Caíste en un bache escondido bajo un charco." },
   "flooded-sinkhole": { width: 5.5, depth: 4.6, cause: "Caíste en un socavón inundado.", dynamic: true, triggerSeconds: 0.95, activationDelay: 0.25 },
   "stuck-car": { width: 2.8, depth: 4.2, cause: "Chocaste con un carro atrapado en un charco." },
+  "stuck-car-dry": { width: 2.8, depth: 4.2, cause: "Chocaste con un carro atrapado en un bache." },
+  wreck: { width: 1.85, depth: 3.3, cause: "Chocaste con un carro accidentado." },
   overtaker: { cause: "Te chocó un carro que venía rebasando desde atrás." }
 };
 const coverGeometry = new THREE.CylinderGeometry(0.85, 0.85, 0.1, 16);
@@ -118,7 +121,7 @@ function pool(parent, width, depth, helpers, geometries, random, bubbling) {
 
 export function createRoadHazard(type, firstLane, helpers, random = Math.random) {
   const details = DETAILS[type];
-  if (!details || type === "car" || type === "overtaker") throw new Error(`Obstáculo vial no válido: ${type}`);
+  if (!details || ["car", "overtaker", "wreck"].includes(type)) throw new Error(`Obstáculo vial no válido: ${type}`);
   const span = details.width > 3 ? 2 : 1;
   if (!Number.isInteger(firstLane) || firstLane < 0 || firstLane + span > 3) {
     throw new Error(`Carriles no válidos: ${firstLane}, ${span}`);
@@ -147,13 +150,18 @@ export function createRoadHazard(type, firstLane, helpers, random = Math.random)
     } else if (random() < 0.5) {
       jaggedSurface(hole, "#806c49", details.width * 0.65, details.depth * 0.62, SURFACE_Y + 0.025, helpers, geometries, random);
     }
-  } else if (["puddle", "puddle-hole", "stuck-car"].includes(type)) {
-    hazard.effects.bubbles = pool(object, details.width, details.depth, helpers, geometries, random, type === "puddle-hole");
-    if (type === "stuck-car") {
+  } else if (["puddle", "puddle-hole", "stuck-car", "stuck-car-dry"].includes(type)) {
+    if (type === "stuck-car-dry") {
+      object.add(crater(details.width, details.depth, helpers, geometries, random));
+    } else {
+      hazard.effects.bubbles = pool(object, details.width, details.depth, helpers, geometries, random, type === "puddle-hole");
+    }
+    if (type === "stuck-car" || type === "stuck-car-dry") {
       const car = helpers.createCar("#b1a38c");
       car.rotation.set(-0.08, 0.12, 0.08);
-      car.position.y = -0.12;
+      car.position.y = type === "stuck-car-dry" ? -0.25 : -0.12;
       object.add(car);
+      hazard.effects.smoke = createSmoke(car);
     }
   } else {
     helpers.disk(object, "#443f34", 0, SURFACE_Y + 0.01, 0, 1.02, 1.02);
@@ -232,6 +240,7 @@ export function updateRoadHazard(hazard, dt, speed, playerZ) {
       bubble.scale.setScalar(0.5 + Math.sin(phase * Math.PI) * 1.1);
     });
   }
+  if (hazard.effects.smoke) updateSmoke(hazard.effects.smoke, dt);
 }
 
 export function collidesWithHazard(hazard, playerX, playerZ) {

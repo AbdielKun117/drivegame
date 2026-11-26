@@ -409,7 +409,8 @@ function update(dt) {
     }
   }
   obstacles = obstacles.filter(obstacle => {
-    if (obstacle.object.position.z <= 20) return true;
+    // Rear traffic still needs to react to hazards the player has passed.
+    if (obstacle.object.position.z <= 50) return true;
     scene.remove(obstacle.object);
     disposeRoadHazard(obstacle);
     return false;
@@ -428,9 +429,17 @@ function update(dt) {
     }
   }
   if (overtaker) {
-    const passed = updateOvertaker(overtaker, dt, PLAYER_Z);
-    if (collidesWithHazard(overtaker, player.position.x, PLAYER_Z)) finish("overtaker");
-    if (passed) {
+    const passed = updateOvertaker(overtaker, dt, PLAYER_Z, obstacles, speed, player.position.x);
+    if (overtaker.crashed) {
+      overtaker.type = "wreck";
+      overtaker.elapsed = 0;
+      obstacles.push(overtaker);
+      if (collidesWithHazard(overtaker, player.position.x, PLAYER_Z)) finish("wreck");
+      else audio.effect("crash");
+      overtaker = null;
+    } else if (collidesWithHazard(overtaker, player.position.x, PLAYER_Z)) {
+      finish("overtaker");
+    } else if (passed) {
       scene.remove(overtaker.object);
       overtaker = null;
     }
