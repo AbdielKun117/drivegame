@@ -6,8 +6,9 @@ const START_SPEED = 23;
 const EVENT_TRIGGER_SECONDS = 1.25;
 const ACTIVATION_DELAY = 0.55;
 const SURFACE_Y = 0.04;
+const HITBOX_SCALE = 0.8;
 const HAZARD_TYPES = ["pothole", "wide-pothole", "sinkhole", "manhole", "sewage", "car", "car", "closed-manhole", "stuck-car-dry"];
-const RAIN_HAZARDS = ["puddle", "puddle", "puddle-hole", "flooded-sinkhole", "flooded-sinkhole", "sewage", "sewage", "stuck-car", "car", "closed-manhole"];
+const RAIN_HAZARDS = ["puddle", "puddle", "puddle-hole", "flooded-sinkhole", "flooded-sinkhole", "sewage", "sewage", "stuck-car", "car", "closed-manhole", "meme-car"];
 const DETAILS = {
   pothole: { width: 2.5, depth: 2.3, cause: "Caíste en un bache." },
   "wide-pothole": { width: 5.5, depth: 3.6, cause: "Caíste en un bache gigante." },
@@ -21,19 +22,23 @@ const DETAILS = {
   "flooded-sinkhole": { width: 5.5, depth: 4.6, cause: "Caíste en un socavón inundado.", dynamic: true, triggerSeconds: 0.95, activationDelay: 0.25 },
   "stuck-car": { width: 2.8, depth: 4.2, cause: "Chocaste con un carro atrapado en un charco." },
   "stuck-car-dry": { width: 2.8, depth: 4.2, cause: "Chocaste con un carro atrapado en un bache." },
+  "meme-car": { width: 2.8, depth: 4.5, cause: "Chocaste con la camioneta inundada." },
   wreck: { width: 1.85, depth: 3.3, cause: "Chocaste con un carro accidentado." },
   overtaker: { cause: "Te chocó un carro que venía rebasando desde atrás." }
 };
 const coverGeometry = new THREE.CylinderGeometry(0.85, 0.85, 0.1, 16);
 const dropletGeometry = new THREE.IcosahedronGeometry(0.12, 0);
+const headGeometry = new THREE.IcosahedronGeometry(0.27, 1);
+const rippleGeometry = new THREE.RingGeometry(0.8, 1, 20);
 
-export function chooseHazard(random = Math.random, raining = false, reservedLane = null) {
+export function chooseHazard(random = Math.random, raining = false, reservedLane = null, memeAvailable = true) {
   const availableStarts = type => {
     const span = DETAILS[type].width > 3 ? 2 : 1;
     return Array.from({ length: 4 - span }, (_, lane) => lane).filter(lane =>
       DETAILS[type].passable || reservedLane === null || reservedLane < lane || reservedLane >= lane + span);
   };
-  const candidates = (raining ? RAIN_HAZARDS : HAZARD_TYPES).filter(type => availableStarts(type).length);
+  const candidates = (raining ? RAIN_HAZARDS : HAZARD_TYPES).filter(type =>
+    (type !== "meme-car" || memeAvailable) && availableStarts(type).length);
   const type = candidates[Math.floor(random() * candidates.length)];
   const span = DETAILS[type].width > 3 ? 2 : 1;
   const starts = availableStarts(type);
@@ -103,9 +108,9 @@ function cracks(parent, width, depth, helpers, random) {
   return group;
 }
 
-function pool(parent, width, depth, helpers, geometries, random, bubbling) {
+function pool(parent, width, depth, helpers, geometries, random, bubbling, color = "#506e79") {
   const water = new THREE.Group();
-  jaggedSurface(water, "#506e79", width, depth, SURFACE_Y + 0.025, helpers, geometries, random);
+  jaggedSurface(water, color, width, depth, SURFACE_Y + 0.025, helpers, geometries, random);
   parent.add(water);
   if (!bubbling) return null;
   const bubbles = new THREE.Group();
@@ -117,6 +122,38 @@ function pool(parent, width, depth, helpers, geometries, random, bubbling) {
   }
   water.add(bubbles);
   return bubbles;
+}
+
+function floodedMemeCar(helpers) {
+  const car = helpers.createCar("#202829");
+  helpers.box(car, "#202829", 0, 1.38, 0.32, 1.68, 0.76, 2.45);
+  helpers.box(car, "#344849", 0, 1.44, -0.92, 1.45, 0.48, 0.05);
+  helpers.box(car, "#344849", 0, 1.44, 1.57, 1.45, 0.48, 0.05);
+  for (const side of [-1, 1]) {
+    helpers.box(car, "#344849", side * 0.85, 1.44, 0.6, 0.04, 0.48, 1.4);
+    helpers.box(car, "#404a4a", side * 0.7, 1.85, 0.32, 0.09, 0.12, 2.55);
+    helpers.box(car, "#e45a43", side * 0.73, 0.82, 1.68, 0.22, 0.44, 0.05);
+  }
+  const woman = new THREE.Group();
+  woman.position.set(-0.85, 1.1, -0.5);
+  helpers.box(woman, "#344655", 0, 0.25, 0, 0.42, 0.45, 0.34);
+  helpers.box(woman, "#c72d40", 0, 0.74, 0, 0.52, 0.62, 0.36);
+  const head = new THREE.Mesh(headGeometry, helpers.material("#d4a080"));
+  head.position.y = 1.27;
+  woman.add(head);
+  helpers.box(woman, "#2e2929", 0, 1.47, -0.04, 0.43, 0.18, 0.42);
+  helpers.box(woman, "#2e2929", 0, 1.32, -0.25, 0.25, 0.28, 0.25);
+  for (const x of [-0.09, 0.09]) helpers.box(woman, "#2e2929", x, 1.31, 0.24, 0.04, 0.04, 0.03);
+  const mouth = helpers.box(woman, "#602b29", 0, 1.16, 0.25, 0.14, 0.05, 0.03);
+  const arm = new THREE.Group();
+  arm.position.set(-0.3, 1.02, 0);
+  helpers.box(arm, "#d4a080", 0, -0.22, 0, 0.15, 0.5, 0.16);
+  woman.add(arm);
+  helpers.box(woman, "#d4a080", 0.33, 0.79, 0.08, 0.15, 0.46, 0.16);
+  car.add(woman);
+  car.position.y = -0.22;
+  car.rotation.z = 0.06;
+  return { car, woman, arm, mouth };
 }
 
 export function createRoadHazard(type, firstLane, helpers, random = Math.random) {
@@ -150,6 +187,26 @@ export function createRoadHazard(type, firstLane, helpers, random = Math.random)
     } else if (random() < 0.5) {
       jaggedSurface(hole, "#806c49", details.width * 0.65, details.depth * 0.62, SURFACE_Y + 0.025, helpers, geometries, random);
     }
+  } else if (type === "meme-car") {
+    pool(object, details.width, details.depth, helpers, geometries, random, false, "#729eae");
+    const { car, woman, arm, mouth } = floodedMemeCar(helpers);
+    object.add(car);
+    const speech = helpers.createSpeechBubble("¡Bato faldilludo!");
+    speech.position.set(-Math.sign(object.position.x), 3.25, 0);
+    speech.visible = false;
+    object.add(speech);
+    const rings = [];
+    for (const x of [-1.05, 1.05]) {
+      for (const z of [-1.1, 1.1]) {
+        const ring = new THREE.Mesh(rippleGeometry, helpers.material("#bed9df"));
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(x, SURFACE_Y + 0.035, z);
+        ring.scale.set(0.25, 0.4, 1);
+        object.add(ring);
+        rings.push(ring);
+      }
+    }
+    Object.assign(hazard.effects, { woman, arm, mouth, speech, rings, shoutTime: null, shoutDuration: 0 });
   } else if (["puddle", "puddle-hole", "stuck-car", "stuck-car-dry"].includes(type)) {
     if (type === "stuck-car-dry") {
       object.add(crater(details.width, details.depth, helpers, geometries, random));
@@ -241,14 +298,34 @@ export function updateRoadHazard(hazard, dt, speed, playerZ) {
     });
   }
   if (hazard.effects.smoke) updateSmoke(hazard.effects.smoke, dt);
+  if (hazard.type === "meme-car") {
+    const effects = hazard.effects;
+    if (effects.shoutTime !== null) effects.shoutTime += dt;
+    const shouting = effects.shoutTime !== null && effects.shoutTime < effects.shoutDuration;
+    effects.speech.visible = shouting;
+    effects.woman.rotation.z = shouting ? Math.sin(effects.shoutTime * 12) * 0.06 : 0;
+    effects.arm.rotation.z = shouting ? -1.1 + Math.sin(effects.shoutTime * 9) * 0.35 : -0.15;
+    effects.mouth.scale.y = shouting ? 0.08 + Math.abs(Math.sin(effects.shoutTime * 24)) * 0.08 : 0.025;
+    effects.rings.forEach((ring, index) => {
+      const swell = 1 + Math.sin(hazard.elapsed * 3 + index) * 0.15;
+      ring.scale.set(0.25 * swell, 0.4 * swell, 1);
+    });
+  }
 }
 
 export function collidesWithHazard(hazard, playerX, playerZ) {
+  const surface = hazard.effects?.hole ?? hazard.effects?.water;
+  const halfWidth = (hazard.width / 2 * (surface?.scale.x ?? 1) + 0.7) * HITBOX_SCALE;
+  const halfDepth = (hazard.depth / 2 * (surface?.scale.z ?? 1) + 1.4) * HITBOX_SCALE;
   return hazard.active &&
-    Math.abs(playerX - hazard.object.position.x) < hazard.width / 2 + 0.7 &&
-    Math.abs(playerZ - hazard.object.position.z) < hazard.depth / 2 + 1.4;
+    Math.abs(playerX - hazard.object.position.x) < halfWidth &&
+    Math.abs(playerZ - hazard.object.position.z) < halfDepth;
 }
 
 export function disposeRoadHazard(hazard) {
   for (const geometry of hazard.geometries ?? []) geometry.dispose();
+  if (hazard.effects.speech) {
+    hazard.effects.speech.material.map?.dispose();
+    hazard.effects.speech.material.dispose();
+  }
 }

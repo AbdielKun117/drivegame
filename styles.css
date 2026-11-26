@@ -40,6 +40,8 @@ h1 span { color: #e5713f; }
 .settings label { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
 .settings input { width: 20px; height: 20px; accent-color: #e87543; cursor: pointer; }
 #settings-status { font-size: 12px; color: #a8462e; line-height: 1.4; }
+.audio-credits { font-size: 11px; line-height: 1.5; color: #907c6c; }
+.audio-credits a { color: #745f52; }
 .direction-buttons-hidden .direction { background: transparent; border-color: transparent; color: transparent; box-shadow: none; }
 .direction-buttons-hidden .direction:active { background: transparent; }
 .main-menu { align-items: safe center; }

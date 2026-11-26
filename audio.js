@@ -1,3 +1,29 @@
+const RECORDINGS = {
+  rain: new URL("./assets/audio/rain.mp3", import.meta.url).href,
+  horn: new URL("./assets/audio/horn.mp3", import.meta.url).href,
+  crash: new URL("./assets/audio/crash.mp3", import.meta.url).href,
+  open: new URL("./assets/audio/manhole-open.mp3", import.meta.url).href,
+  rattle: new URL("./assets/audio/manhole-rattle.mp3", import.meta.url).href,
+  collapse: new URL("./assets/audio/collapse.mp3", import.meta.url).href,
+  "voice-1": new URL("./assets/audio/voice-1.mp3", import.meta.url).href,
+  "voice-2": new URL("./assets/audio/voice-2.mp3", import.meta.url).href,
+  "voice-3": new URL("./assets/audio/voice-3.mp3", import.meta.url).href,
+  "voice-4": new URL("./assets/audio/voice-4.mp3", import.meta.url).href,
+  "voice-5": new URL("./assets/audio/voice-5.mp3", import.meta.url).href,
+  "voice-6": new URL("./assets/audio/voice-6.mp3", import.meta.url).href,
+  "overtake-voice-1": new URL("./assets/audio/overtake-voice-1.mp3", import.meta.url).href,
+  "overtake-voice-2": new URL("./assets/audio/overtake-voice-2.mp3", import.meta.url).href
+};
+const VOICES = [
+  { name: "voice-1", duration: 1.8 },
+  { name: "voice-2", duration: 3.24 },
+  { name: "voice-3", duration: 5.15 },
+  { name: "voice-4", duration: 2.69 },
+  { name: "voice-5", duration: 2.12 },
+  { name: "voice-6", duration: 1.72 }
+];
+const OVERTAKE_VOICES = ["overtake-voice-1", "overtake-voice-2"];
+
 export class GameAudio {
   constructor(onError) {
     this.onError = onError;
@@ -6,7 +32,60 @@ export class GameAudio {
     this.playing = false;
     this.beat = 0;
     this.beatTimer = 0;
-    this.rainTimer = 0;
+    this.buffers = new Map();
+    this.loadPromise = null;
+    this.sources = new Set();
+    this.rain = null;
+    this.generation = 0;
+    this.listener = null;
+    this.spatialSounds = new Map();
+    this.removedEmitters = new WeakSet();
+  }
+
+  setListener(listener) {
+    this.listener = listener;
+  }
+
+  proximityVolume(emitter) {
+    if (!this.listener) throw new Error("No se configuró el receptor del audio de proximidad.");
+    const distance = Math.hypot(
+      emitter.position.x - this.listener.position.x,
+      emitter.position.y - this.listener.position.y,
+      emitter.position.z - this.listener.position.z
+    );
+    return 1 / (1 + Math.max(0, distance - 4) / 12);
+  }
+
+  connectOutput(source, gain, bus, emitter = null, filter = null) {
+    let spatialGain = null;
+    if (emitter) {
+      spatialGain = this.context.createGain();
+      spatialGain.gain.value = this.proximityVolume(emitter);
+      gain.connect(spatialGain);
+      spatialGain.connect(bus);
+      this.spatialSounds.set(source, { emitter, gain: spatialGain });
+    } else {
+      gain.connect(bus);
+    }
+    if (bus === this.effectsBus) this.sources.add(source);
+    source.onended = () => {
+      this.sources.delete(source);
+      this.spatialSounds.delete(source);
+      source.disconnect();
+      gain.disconnect();
+      spatialGain?.disconnect();
+      filter?.disconnect();
+    };
+  }
+
+  stopEmitter(emitter) {
+    this.removedEmitters.add(emitter);
+    for (const [source, sound] of this.spatialSounds) {
+      if (sound.emitter !== emitter) continue;
+      source.stop();
+      this.sources.delete(source);
+      this.spatialSounds.delete(source);
+    }
   }
 
   setSettings(settings) {
@@ -14,14 +93,16 @@ export class GameAudio {
     if (this.context) {
       this.musicBus.gain.value = this.playing && settings.music ? 0.09 : 0;
       this.effectsBus.gain.value = settings.effects ? 0.3 : 0;
+      if (!settings.effects) this.stopRecordings();
     }
   }
 
   async start() {
+    this.stopRecordings();
     this.playing = true;
+    this.generation++;
     this.beat = 0;
     this.beatTimer = 0;
-    this.rainTimer = 0;
     if (!this.settings.music && !this.settings.effects) return;
     try {
       if (!this.context) {
@@ -38,6 +119,7 @@ export class GameAudio {
       }
       this.setSettings(this.settings);
       await this.context.resume();
+      await this.loadRecordings();
     } catch (error) {
       this.onError(error);
     }
@@ -45,7 +127,70 @@ export class GameAudio {
 
   stop() {
     this.playing = false;
+    this.generation++;
     if (this.context) this.musicBus.gain.value = 0;
+    this.stopRecordings();
+  }
+
+  async loadRecordings() {
+    if (this.buffers.size === Object.keys(RECORDINGS).length) return;
+    if (!this.loadPromise) {
+      this.loadPromise = Promise.all(Object.entries(RECORDINGS).map(async ([name, url]) => {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`No se pudo cargar el sonido ${name}: HTTP ${response.status}.`);
+        const buffer = await this.context.decodeAudioData(await response.arrayBuffer());
+        return [name, buffer];
+      })).then(entries => {
+        this.buffers = new Map(entries);
+      }).finally(() => {
+        this.loadPromise = null;
+      });
+    }
+    await this.loadPromise;
+  }
+
+  recording(name, volume = 1, loop = false, delay = 0, emitter = null) {
+    const buffer = this.buffers.get(name);
+    if (!buffer) throw new Error(`La grabación ${name} no está cargada.`);
+    const source = this.context.createBufferSource();
+    const gain = this.context.createGain();
+    source.buffer = buffer;
+    source.loop = loop;
+    gain.gain.value = volume;
+    source.connect(gain);
+    this.connectOutput(source, gain, this.effectsBus, emitter);
+    source.start(this.context.currentTime + delay);
+    return { source, gain };
+  }
+
+  stopRecordings() {
+    this.rain = null;
+    for (const source of this.sources) source.stop();
+    this.sources.clear();
+    this.spatialSounds.clear();
+  }
+
+  async recordedEffect(name, delay = 0, emitter = null) {
+    const generation = this.generation;
+    try {
+      await this.loadRecordings();
+      if (generation !== this.generation || !this.settings.effects || this.context.state !== "running") return;
+      if (emitter && this.removedEmitters.has(emitter)) return;
+      this.recording(name, name === "horn" ? 2 : name.includes("voice-") ? 0.85 : 1.5, false, delay, emitter);
+    } catch (error) {
+      this.onError(error);
+    }
+  }
+
+  playVoice(delay = 0, random = Math.random, emitter = null) {
+    const voice = VOICES[Math.floor(random() * VOICES.length)];
+    this.effect(voice.name, delay, emitter);
+    return voice.duration;
+  }
+
+  playOvertakeVoice(delay = 1.6, random = Math.random, emitter = null) {
+    const name = OVERTAKE_VOICES[Math.floor(random() * OVERTAKE_VOICES.length)];
+    this.effect(name, delay, emitter);
   }
 
   async setVisible(visible) {
@@ -58,7 +203,7 @@ export class GameAudio {
     }
   }
 
-  tone(frequency, duration, volume, bus, type = "triangle", delay = 0, endFrequency = frequency) {
+  tone(frequency, duration, volume, bus, type = "triangle", delay = 0, endFrequency = frequency, emitter = null) {
     const context = this.context;
     const time = context.currentTime + delay;
     const oscillator = context.createOscillator();
@@ -70,13 +215,12 @@ export class GameAudio {
     gain.gain.linearRampToValueAtTime(volume, time + 0.015);
     gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
     oscillator.connect(gain);
-    gain.connect(bus);
-    oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
+    this.connectOutput(oscillator, gain, bus, emitter);
     oscillator.start(time);
     oscillator.stop(time + duration);
   }
 
-  noise(duration, frequency, volume) {
+  noise(duration, frequency, volume, emitter = null) {
     const context = this.context;
     const source = context.createBufferSource();
     const filter = context.createBiquadFilter();
@@ -89,14 +233,20 @@ export class GameAudio {
     gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + duration);
     source.connect(filter);
     filter.connect(gain);
-    gain.connect(this.effectsBus);
-    source.onended = () => { source.disconnect(); filter.disconnect(); gain.disconnect(); };
+    this.connectOutput(source, gain, this.effectsBus, emitter, filter);
     source.start();
     source.stop(context.currentTime + duration);
   }
 
   tick(dt, raining) {
     if (!this.playing || this.context?.state !== "running") return;
+    const time = this.context.currentTime;
+    for (const sound of this.spatialSounds.values()) {
+      const parameter = sound.gain.gain;
+      parameter.cancelScheduledValues(time);
+      parameter.setValueAtTime(parameter.value, time);
+      parameter.linearRampToValueAtTime(this.proximityVolume(sound.emitter), time + 0.05);
+    }
     this.beatTimer -= dt;
     if (this.settings.music && this.beatTimer <= 0) {
       const melody = [60, 64, 67, 69, 67, 64, 62, 64, 57, 60, 64, 67, 64, 60, 59, 62];
@@ -106,44 +256,48 @@ export class GameAudio {
       this.beat++;
       this.beatTimer = 0.23;
     }
-    this.rainTimer -= dt;
-    if (raining && this.settings.effects && this.rainTimer <= 0) {
-      this.noise(0.3, 2200, 0.16);
-      this.rainTimer = 0.2;
+    if (raining && this.settings.effects && !this.rain && this.buffers.has("rain")) {
+      this.rain = this.recording("rain", 0, true);
+      const time = this.context.currentTime;
+      this.rain.gain.gain.setValueAtTime(0, time);
+      this.rain.gain.gain.linearRampToValueAtTime(0.85, time + 1);
+    } else if (!raining && this.rain) {
+      const time = this.context.currentTime;
+      this.rain.gain.gain.cancelScheduledValues(time);
+      this.rain.gain.gain.setValueAtTime(this.rain.gain.gain.value, time);
+      this.rain.gain.gain.linearRampToValueAtTime(0, time + 0.5);
+      this.rain.source.stop(time + 0.5);
+      this.rain = null;
     }
   }
 
-  effect(name) {
+  effect(name, delay = 0, emitter = null) {
     if (!this.settings.effects || this.context?.state !== "running") return;
     const bus = this.effectsBus;
     switch (name) {
       case "horn":
-        for (const delay of [0, 0.5]) {
-          this.tone(349, 0.3, 0.4, bus, "sawtooth", delay);
-          this.tone(440, 0.3, 0.25, bus, "triangle", delay);
-        }
-        break;
-      case "collapse":
-        this.noise(0.8, 550, 0.85);
-        this.tone(110, 0.7, 0.8, bus, "sine", 0, 35);
-        break;
-      case "rattle":
-      case "pothole":
-        this.noise(0.2, 1400, 0.5);
-        this.tone(180, 0.15, 0.3, bus, "triangle", 0, 75);
-        break;
+      case "crash":
+      case "voice-1":
+      case "voice-2":
+      case "voice-3":
+      case "voice-4":
+      case "voice-5":
+      case "voice-6":
+      case "overtake-voice-1":
+      case "overtake-voice-2":
       case "open":
-        this.tone(620, 0.28, 0.6, bus, "square", 0, 170);
-        this.noise(0.22, 1800, 0.3);
+      case "rattle":
+      case "collapse":
+        void this.recordedEffect(name, delay, emitter);
+        break;
+      case "pothole":
+        this.noise(0.2, 1400, 0.5, emitter);
+        this.tone(180, 0.15, 0.3, bus, "triangle", 0, 75, emitter);
         break;
       case "overflow":
       case "splash":
-        this.noise(0.65, 1000, 0.65);
-        for (let i = 0; i < 3; i++) this.tone(180 + i * 70, 0.2, 0.25, bus, "sine", i * 0.12, 80);
-        break;
-      case "crash":
-        this.noise(0.75, 2800, 0.9);
-        this.tone(160, 0.65, 0.9, bus, "sawtooth", 0, 35);
+        this.noise(0.65, 1000, 0.65, emitter);
+        for (let i = 0; i < 3; i++) this.tone(180 + i * 70, 0.2, 0.25, bus, "sine", i * 0.12, 80, emitter);
         break;
       default:
         throw new Error(`Efecto de sonido desconocido: ${name}`);

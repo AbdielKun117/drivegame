@@ -92,6 +92,18 @@ test("an obstacle that appears too close causes a stopped, smoking car", () => {
   assert.equal(car.object.position.z, stoppedZ);
 });
 
+test("passing cars tolerate an obstacle graze but still crash on deeper contact", () => {
+  const car = createOvertaker(new THREE.Group(), { lane: 2, escapeLane: 0 });
+  const obstacle = roadObstacle(0, 3);
+  car.object.position.set(1.75, 0, 3);
+  updateOvertaker(car, 0, 3, [obstacle], 23, -3);
+  assert.equal(car.crashed, false);
+  car.object.position.x = 1.4;
+  updateOvertaker(car, 0, 3, [obstacle], 23, -3);
+  assert.equal(car.crashed, true);
+  assert.ok(car.effects.smoke.visible);
+});
+
 test("a car cannot evade into blocked lanes or the player's escape lane during a pass", () => {
   const car = createOvertaker(new THREE.Group(), { lane: 1, escapeLane: 0 });
   car.object.position.z = 3;
@@ -128,5 +140,7 @@ test("a cover that suddenly opens beside a passing car can cause a crash", () =>
   obstacle.active = true;
   obstacle.eventTime = 0.6;
   updateOvertaker(car, 0.1, 3, [obstacle], 23, -3);
+  assert.equal(car.crashed, false);
+  updateOvertaker(car, 0.05, 3, [obstacle], 23, -3);
   assert.equal(car.crashed, true);
 });

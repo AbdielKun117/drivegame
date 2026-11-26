@@ -48,7 +48,7 @@ try {
 }
 const audio = new GameAudio(error => {
   console.error("No se pudo reproducir el audio.", error);
-  settingsStatus.textContent = "No se pudo iniciar el audio. Comprueba los permisos de sonido del navegador.";
+  settingsStatus.textContent = "No se pudo cargar o reproducir un sonido. Comprueba la conexión y los permisos de audio.";
   settingsStatus.hidden = false;
 });
 
@@ -152,6 +152,33 @@ function createCar(color) {
   return car;
 }
 
+function createSpeechBubble(text) {
+  const image = document.createElement("canvas");
+  image.width = 512;
+  image.height = 128;
+  const context = image.getContext("2d");
+  if (!context) throw new Error("No se pudo dibujar el diálogo del evento.");
+  context.fillStyle = "#fffaf2";
+  context.beginPath();
+  context.roundRect(2, 2, 508, 110, 24);
+  context.fill();
+  context.beginPath();
+  context.moveTo(232, 110);
+  context.lineTo(256, 128);
+  context.lineTo(280, 110);
+  context.fill();
+  context.fillStyle = "#382d29";
+  context.font = "bold 42px system-ui";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(text, 256, 57);
+  const texture = new THREE.CanvasTexture(image);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const speech = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthWrite: false }));
+  speech.scale.set(4.6, 1.15, 1);
+  return speech;
+}
+
 function cactus(parent, x, z, size) {
   const plant = new THREE.Group();
   plant.position.set(x, 0, z);
@@ -219,6 +246,7 @@ for (let i = 0; i < 8; i++) {
 const player = createCar("#ed7848");
 player.position.z = PLAYER_Z;
 scene.add(player);
+audio.setListener(player);
 
 let best = 0;
 try {
@@ -239,6 +267,7 @@ let touchStartX = null;
 let controlHintTimer = null;
 let runTime = 0;
 let weather = createWeather();
+let memeSpawned = false;
 let overtaker = null;
 let overtakeTimer = 8;
 
@@ -273,11 +302,15 @@ function move(direction) {
 
 function clearObstacles() {
   for (const obstacle of obstacles) {
+    audio.stopEmitter(obstacle.object);
     scene.remove(obstacle.object);
     disposeRoadHazard(obstacle);
   }
   obstacles = [];
-  if (overtaker) scene.remove(overtaker.object);
+  if (overtaker) {
+    audio.stopEmitter(overtaker.object);
+    scene.remove(overtaker.object);
+  }
   overtaker = null;
 }
 
@@ -292,6 +325,7 @@ function start() {
   distance = 0;
   runTime = 0;
   weather = createWeather();
+  memeSpawned = false;
   overtakeTimer = 6 + Math.random() * 5;
   updateSky(0, 0);
   spawnTimer = 0.8;
@@ -353,7 +387,8 @@ function finish(obstacleType) {
 function update(dt) {
   const speed = getRunSpeed(distance);
   runTime += dt;
-  updateWeather(weather, dt, runTime);
+  const weatherTransition = updateWeather(weather, dt, runTime);
+  if (weatherTransition === "started") memeSpawned = false;
   updateSky(dt, speed);
   audio.tick(dt, weather.raining);
   distance += speed * dt;
@@ -369,7 +404,8 @@ function update(dt) {
   spawnTimer -= dt;
   if (spawnTimer <= 0) {
     const reservedLane = overtaker && overtaker.object.position.z > PLAYER_Z - 4 ? overtaker.escapeLane : null;
-    const { type, firstLane } = chooseHazard(Math.random, weather.raining, reservedLane);
+    const memeAvailable = !memeSpawned && weather.remaining > 100 / speed + 2;
+    const { type, firstLane } = chooseHazard(Math.random, weather.raining, reservedLane, memeAvailable);
     const colors = ["#7da9a2", "#dbbd8c", "#b98176", "#9397b1"];
     let obstacle;
     if (type === "car") {
@@ -377,8 +413,9 @@ function update(dt) {
       object.position.x = LANES[firstLane];
       obstacle = { object, type, active: true, width: 1.85, depth: 3.3, elapsed: 0, effects: {} };
     } else {
-      obstacle = createRoadHazard(type, firstLane, { box, disk, material, createCar });
+      obstacle = createRoadHazard(type, firstLane, { box, disk, material, createCar, createSpeechBubble });
     }
+    if (type === "meme-car") memeSpawned = true;
     obstacle.object.position.z = -90;
     scene.add(obstacle.object);
     obstacles.push(obstacle);
@@ -389,19 +426,25 @@ function update(dt) {
     const wasActive = obstacle.active;
     const wasForming = obstacle.eventTime !== null;
     updateRoadHazard(obstacle, dt, speed, PLAYER_Z);
-    if (obstacle.dynamic && !wasForming && obstacle.eventTime !== null && obstacle.effects.hinge) audio.effect("rattle");
+    if (obstacle.dynamic && !wasForming && obstacle.eventTime !== null && obstacle.effects.hinge) audio.effect("rattle", 0, obstacle.object);
     if (obstacle.dynamic && !wasActive && obstacle.active) {
-      audio.effect(obstacle.effects.hole ? "collapse" : obstacle.type === "sewage" ? "overflow" : "open");
+      audio.effect(obstacle.effects.hole ? "collapse" : obstacle.type === "sewage" ? "overflow" : "open", 0, obstacle.object);
     }
     const nearby = Math.abs(obstacle.object.position.z - PLAYER_Z) < 16;
     if (nearby && !obstacle.soundPlayed && ["pothole", "wide-pothole"].includes(obstacle.type)) {
-      audio.effect("pothole");
+      audio.effect("pothole", 0, obstacle.object);
       obstacle.soundPlayed = true;
     }
     if (obstacle.type === "puddle" && !obstacle.soundPlayed &&
         Math.abs(obstacle.object.position.x - player.position.x) < 1.5 && Math.abs(obstacle.object.position.z - PLAYER_Z) < 2) {
-      audio.effect("splash");
+      audio.effect("splash", 0, obstacle.object);
       obstacle.soundPlayed = true;
+    }
+    if (obstacle.type === "meme-car" && weather.raining && !obstacle.soundPlayed &&
+        obstacle.object.position.z < PLAYER_Z && PLAYER_Z - obstacle.object.position.z < 38) {
+      obstacle.effects.shoutDuration = audio.playVoice(0, Math.random, obstacle.object);
+      obstacle.soundPlayed = true;
+      obstacle.effects.shoutTime = 0;
     }
     if (collidesWithHazard(obstacle, player.position.x, PLAYER_Z)) {
       finish(obstacle.type);
@@ -411,6 +454,7 @@ function update(dt) {
   obstacles = obstacles.filter(obstacle => {
     // Rear traffic still needs to react to hazards the player has passed.
     if (obstacle.object.position.z <= 50) return true;
+    audio.stopEmitter(obstacle.object);
     scene.remove(obstacle.object);
     disposeRoadHazard(obstacle);
     return false;
@@ -422,7 +466,8 @@ function update(dt) {
     if (plan) {
       overtaker = createOvertaker(createCar("#658eb0"), plan);
       scene.add(overtaker.object);
-      audio.effect("horn");
+      audio.effect("horn", 0, overtaker.object);
+      if (Math.random() < 0.35) audio.playOvertakeVoice(1.6, Math.random, overtaker.object);
       overtakeTimer = 8 + Math.random() * 8;
     } else {
       overtakeTimer = 0.5;
@@ -435,11 +480,12 @@ function update(dt) {
       overtaker.elapsed = 0;
       obstacles.push(overtaker);
       if (collidesWithHazard(overtaker, player.position.x, PLAYER_Z)) finish("wreck");
-      else audio.effect("crash");
+      else audio.effect("crash", 0, overtaker.object);
       overtaker = null;
     } else if (collidesWithHazard(overtaker, player.position.x, PLAYER_Z)) {
       finish("overtaker");
     } else if (passed) {
+      audio.stopEmitter(overtaker.object);
       scene.remove(overtaker.object);
       overtaker = null;
     }

@@ -30,6 +30,9 @@ const helpers = {
     const car = new THREE.Group();
     helpers.box(car, color, 0, 0.6, 0, 1.85, 0.65, 3.3);
     return car;
+  },
+  createSpeechBubble() {
+    return new THREE.Sprite(new THREE.SpriteMaterial());
   }
 };
 
@@ -101,6 +104,50 @@ test("traffic stays collidable and hazards leave time to change lanes", () => {
   }
 });
 
+test("all damaging hazards allow edge grazes but still collide inside their smaller hitboxes", () => {
+  const hazards = [
+    "pothole", "wide-pothole", "sinkhole", "manhole", "sewage", "puddle-hole",
+    "flooded-sinkhole", "stuck-car", "stuck-car-dry", "meme-car"
+  ].map(type => createRoadHazard(type, 1, helpers, () => 0.5));
+  for (const type of ["car", "overtaker", "wreck"]) {
+    hazards.push({ type, object: new THREE.Group(), width: 1.85, depth: 3.3, effects: {} });
+  }
+  for (const hazard of hazards) {
+    hazard.active = true;
+    hazard.object.position.z = 3;
+    const { x, z } = hazard.object.position;
+    const halfWidth = (hazard.width / 2 + 0.7) * 0.8;
+    const halfDepth = (hazard.depth / 2 + 1.4) * 0.8;
+    assert.equal(collidesWithHazard(hazard, x, z), true, hazard.type);
+    for (const sign of [-1, 1]) {
+      assert.equal(collidesWithHazard(hazard, x + sign * (halfWidth + 0.01), z), false, `${hazard.type}: side graze`);
+      assert.equal(collidesWithHazard(hazard, x + sign * (halfWidth - 0.01), z), true, `${hazard.type}: side contact`);
+      assert.equal(collidesWithHazard(hazard, x, z + sign * (halfDepth + 0.01)), false, `${hazard.type}: end graze`);
+      assert.equal(collidesWithHazard(hazard, x, z + sign * (halfDepth - 0.01)), true, `${hazard.type}: end contact`);
+    }
+    disposeRoadHazard(hazard);
+  }
+});
+
+test("forming sinkholes and sewage only collide within their growing surface", () => {
+  for (const type of ["sinkhole", "flooded-sinkhole", "sewage"]) {
+    const hazard = createRoadHazard(type, 1, helpers, () => 0.5);
+    hazard.object.position.z = 3;
+    hazard.eventTime = hazard.activationDelay;
+    updateRoadHazard(hazard, 0, 23, 3);
+    const { x, z } = hazard.object.position;
+    assert.equal(collidesWithHazard(hazard, x, z), true, `${type}: opened center`);
+    assert.equal(collidesWithHazard(hazard, x + 1.2, z), false, `${type}: outside initial width`);
+    assert.equal(collidesWithHazard(hazard, x, z + 1.8), false, `${type}: outside initial depth`);
+    updateRoadHazard(hazard, 0.35, 23, 3);
+    assert.equal(collidesWithHazard(hazard, x + 1.2, z), true, `${type}: expanded width`);
+    assert.equal(collidesWithHazard(hazard, x, z + 1.8), true, `${type}: expanded depth`);
+    hazard.active = false;
+    assert.equal(collidesWithHazard(hazard, x, z), false, `${type}: inactive`);
+    disposeRoadHazard(hazard);
+  }
+});
+
 test("a run accelerates to a cap and progressively spawns substantially more objects", () => {
   let distance = 0;
   let timer = 0.8;
@@ -157,7 +204,7 @@ test("quiet manholes are passable while dangerous lids shake only when close", (
     updateRoadHazard(hazard, 0.6, MAX_SPEED, 3);
     assert.equal(hazard.active, true);
     hazard.object.position.z = 3;
-    assert.equal(collidesWithHazard(hazard, 0, 3), true);
+    assert.equal(collidesWithHazard(hazard, hazard.object.position.x, 3), true);
     disposeRoadHazard(hazard);
   }
   for (let tick = 0; tick < 80; tick++) {
@@ -258,5 +305,24 @@ test("dry weather can produce a smoking car trapped in a pothole", () => {
   updateRoadHazard(hazard, 0.5, MAX_SPEED, 3);
   assert.notEqual(hazard.effects.smoke.children[0].position.y, smokeBefore);
   assert.equal(collidesWithHazard(hazard, hazard.object.position.x, 3), true);
+  disposeRoadHazard(hazard);
+});
+
+test("the flooded meme car appears only in rain and can be excluded after its first appearance", () => {
+  assert.equal(chooseHazard(() => 0.999, true).type, "meme-car");
+  assert.notEqual(chooseHazard(() => 0.999, true, null, false).type, "meme-car");
+  for (let i = 0; i < 100; i++) assert.notEqual(chooseHazard(() => i / 100, false).type, "meme-car");
+  const hazard = createRoadHazard("meme-car", 1, helpers, () => 0.5);
+  hazard.object.position.z = 3;
+  assert.equal(collidesWithHazard(hazard, 0, 3), true);
+  assert.equal(collidesWithHazard(hazard, -3, 3), false);
+  assert.equal(hazard.effects.speech.visible, false);
+  hazard.effects.shoutTime = 0;
+  hazard.effects.shoutDuration = 1.8;
+  updateRoadHazard(hazard, 0.2, 23, 3);
+  assert.equal(hazard.effects.speech.visible, true);
+  assert.notEqual(hazard.effects.arm.rotation.z, -0.15);
+  updateRoadHazard(hazard, 2, 23, 3);
+  assert.equal(hazard.effects.speech.visible, false);
   disposeRoadHazard(hazard);
 });
