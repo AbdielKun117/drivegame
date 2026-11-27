@@ -45,12 +45,8 @@ function paintSignal(signal) {
   }
 }
 
-export function canAccelerate(signal) {
-  return Boolean(signal && !signal.passed && signal.phase !== "red");
-}
-
-export function drivingSpeed(baseSpeed, held, signal) {
-  return baseSpeed * (held && canAccelerate(signal) ? 1.5 : 1);
+export function drivingSpeed(baseSpeed, held) {
+  return baseSpeed * (held ? 1.5 : 1);
 }
 
 export function updateSignal(signal, dt, speed, playerZ) {

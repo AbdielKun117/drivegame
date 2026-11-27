@@ -4,7 +4,7 @@ import { GameAudio, RADIO_STATIONS } from "./audio.js";
 import { createWeather, updateWeather, createRainVisuals, updateRainVisuals } from "./weather.js";
 import { planOvertake, createOvertaker, updateOvertaker, createTrafficVehicle, updateLaneChange } from "./traffic-events.js";
 import { createBus, createPatrol } from "./vehicle-models.js";
-import { createSignal, updateSignal, canAccelerate, drivingSpeed, createPursuit, updatePursuit } from "./intersection-events.js";
+import { createSignal, updateSignal, drivingSpeed, createPursuit, updatePursuit } from "./intersection-events.js";
 
 const canvas = document.getElementById("game");
 const scoreElement = document.getElementById("score");
@@ -23,7 +23,6 @@ const settingsStatus = document.getElementById("settings-status");
 const colorInput = document.getElementById("setting-color");
 const radioInput = document.getElementById("setting-radio");
 const radioButton = document.getElementById("radio-next");
-const accelerateButton = document.getElementById("accelerate");
 const pursuitStatus = document.getElementById("pursuit-status");
 const settingInputs = {
   buttons: document.getElementById("setting-buttons"),
@@ -308,7 +307,7 @@ let obstacles = [];
 let distance = 0;
 let spawnTimer = 0;
 let lastTime = null;
-let touchStartX = null;
+const drivingPointers = new Map();
 let controlHintTimer = null;
 let runTime = 0;
 let weather = createWeather();
@@ -319,7 +318,16 @@ let signal = null;
 let signalTimer = 4;
 let pursuit = null;
 let keyAccelerating = false;
-let touchAccelerating = false;
+
+function releaseDrivingInput() {
+  keyAccelerating = false;
+  gameInterface.classList.remove("accelerating");
+  const pointers = [...drivingPointers.keys()];
+  drivingPointers.clear();
+  for (const id of pointers) {
+    if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+  }
+}
 
 function updateDrivingEvents(dt, speed) {
   if (pursuit) {
@@ -348,10 +356,6 @@ function updateDrivingEvents(dt, speed) {
       signalTimer = 16 + Math.random() * 8;
     }
   }
-  const available = canAccelerate(signal);
-  accelerateButton.hidden = !available;
-  accelerateButton.setAttribute("aria-pressed", String(available && (keyAccelerating || touchAccelerating)));
-  accelerateButton.dataset.phase = signal?.phase ?? "";
   const chasing = pursuit && pursuit.remaining > 0;
   pursuitStatus.hidden = !chasing;
   if (chasing) pursuitStatus.textContent = `PERSECUCIÓN · ${Math.ceil(pursuit.remaining)} s`;
@@ -407,9 +411,7 @@ function clearObstacles() {
     scene.remove(pursuit.object);
   }
   pursuit = null;
-  keyAccelerating = false;
-  touchAccelerating = false;
-  accelerateButton.hidden = true;
+  releaseDrivingInput();
   pursuitStatus.hidden = true;
   camera.position.set(0, 7.5, 15);
   camera.lookAt(0, 0.5, -12);
@@ -448,7 +450,6 @@ function showMenu() {
   audio.stop();
   hideControlHint();
   lastTime = null;
-  touchStartX = null;
   clearObstacles();
   weather = createWeather();
   updateSky(0, 0);
@@ -462,9 +463,7 @@ function showMenu() {
 
 function finish(obstacleType) {
   playing = false;
-  keyAccelerating = false;
-  touchAccelerating = false;
-  accelerateButton.hidden = true;
+  releaseDrivingInput();
   pursuitStatus.hidden = true;
   audio.stop();
   audio.effect("crash");
@@ -492,7 +491,9 @@ function finish(obstacleType) {
 
 function update(dt) {
   const baseSpeed = getRunSpeed(distance);
-  const speed = drivingSpeed(baseSpeed, keyAccelerating || touchAccelerating, signal);
+  const accelerating = keyAccelerating || drivingPointers.size > 0;
+  gameInterface.classList.toggle("accelerating", accelerating);
+  const speed = drivingSpeed(baseSpeed, accelerating);
   runTime += dt;
   const weatherTransition = updateWeather(weather, dt, runTime);
   if (weatherTransition === "started") memeSpawned = false;
@@ -636,32 +637,33 @@ document.addEventListener("keyup", event => {
     keyAccelerating = false;
   }
 });
-accelerateButton.addEventListener("pointerdown", event => {
-  if (!playing || !canAccelerate(signal)) return;
-  event.preventDefault();
-  touchAccelerating = true;
-  accelerateButton.setPointerCapture(event.pointerId);
-});
-for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) {
-  accelerateButton.addEventListener(event, () => { touchAccelerating = false; });
-}
-window.addEventListener("blur", () => { keyAccelerating = false; touchAccelerating = false; });
+window.addEventListener("blur", releaseDrivingInput);
 canvas.addEventListener("pointerdown", event => {
-  touchStartX = event.clientX;
+  if (!playing || event.button !== 0) return;
+  event.preventDefault();
+  drivingPointers.set(event.pointerId, event.clientX);
   canvas.setPointerCapture(event.pointerId);
 });
-canvas.addEventListener("pointerup", event => {
-  if (touchStartX !== null) {
-    const delta = event.clientX - touchStartX;
-    if (Math.abs(delta) > 25) move(delta < 0 ? -1 : 1);
+function moveDrivingPointer(event) {
+  const previousX = drivingPointers.get(event.pointerId);
+  if (previousX === undefined) return;
+  const delta = event.clientX - previousX;
+  if (Math.abs(delta) > 25) {
+    move(delta < 0 ? -1 : 1);
+    drivingPointers.set(event.pointerId, event.clientX);
   }
-  touchStartX = null;
+}
+canvas.addEventListener("pointermove", moveDrivingPointer);
+canvas.addEventListener("pointerup", event => {
+  moveDrivingPointer(event);
+  drivingPointers.delete(event.pointerId);
 });
-canvas.addEventListener("pointercancel", () => { touchStartX = null; });
+for (const event of ["pointercancel", "lostpointercapture"]) {
+  canvas.addEventListener(event, event => { drivingPointers.delete(event.pointerId); });
+}
 document.addEventListener("visibilitychange", () => {
   lastTime = null;
-  keyAccelerating = false;
-  touchAccelerating = false;
+  releaseDrivingInput();
   void audio.setVisible(!document.hidden);
 });
 requestAnimationFrame(frame);

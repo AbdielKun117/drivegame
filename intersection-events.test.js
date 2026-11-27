@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { createSignal, updateSignal, canAccelerate, drivingSpeed, createPursuit, updatePursuit } from "./intersection-events.js";
+import { createSignal, updateSignal, drivingSpeed, createPursuit, updatePursuit } from "./intersection-events.js";
 
 const helpers = { box() {} };
 
@@ -9,7 +9,6 @@ test("signals approach in green, flash yellow, and boosting can beat a red cross
   for (const base of [23, 30, 42]) {
     const normal = createSignal(base, 3, helpers);
     assert.equal(normal.phase, "green");
-    assert.equal(canAccelerate(normal), true);
     updateSignal(normal, normal.greenSeconds, base, 3);
     assert.equal(normal.phase, "yellow");
     const yellow = normal.lamps.find(entry => entry.phase === "yellow").lamp.material;
@@ -18,16 +17,19 @@ test("signals approach in green, flash yellow, and boosting can beat a red cross
     let normalResult = null;
     while (!normal.passed) normalResult = updateSignal(normal, 0.01, base, 3);
     assert.equal(normalResult, "violation");
-    assert.equal(drivingSpeed(base, true, normal), base);
     assert.equal(updateSignal(normal, 1, base, 3), null);
     const boosted = createSignal(base, 3, helpers);
     let boostResult = null;
-    while (!boosted.passed) boostResult = updateSignal(boosted, 0.01, drivingSpeed(base, true, boosted), 3);
+    while (!boosted.passed) boostResult = updateSignal(boosted, 0.01, drivingSpeed(base, true), 3);
     assert.equal(boostResult, "passed");
     assert.equal(boosted.object.visible, false);
-    assert.equal(canAccelerate(boosted), false);
-    assert.equal(drivingSpeed(base, true, null), base);
-    assert.equal(drivingSpeed(base, false, createSignal(base, 3, helpers)), base);
+  }
+});
+
+test("holding the accelerator boosts every run speed without a signal and releasing restores normal speed", () => {
+  for (const base of [23, 30, 42]) {
+    assert.equal(drivingSpeed(base, true), base * 1.5);
+    assert.equal(drivingSpeed(base, false), base);
   }
 });
 

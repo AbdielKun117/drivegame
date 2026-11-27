@@ -35,11 +35,25 @@
               <p class="audio-credits">Radio Regional: «<a href="https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100253" target="_blank" rel="noopener noreferrer">Double Polka</a>», Kevin MacLeod (incompetech.com), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>. Polca instrumental con acordeón, tuba y batería.</p>
               <p id="settings-status" role="status" hidden></p>
             </details>
-            <p class="menu-instructions">Usa las flechas o desliza para cambiar de carril. En los semáforos, mantén Espacio o Acelerar para pasar antes del rojo.</p>
+            <p class="menu-instructions">Usa las flechas o desliza para cambiar de carril. Mantén Espacio, el dedo sobre la carretera o el clic izquierdo para acelerar; puedes deslizar sin soltar.</p>
             <footer>HECHO PARA RODAR <span>✦</span> PROTOTIPO 3D</footer>
           </div>
         </section>
         <div id="game-interface" hidden>
+          <svg class="speed-lines" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+            <path pathLength="100" d="M260 200 L-40 -20"/>
+            <path pathLength="100" d="M220 290 L-40 150"/>
+            <path pathLength="100" d="M180 390 L-40 330"/>
+            <path pathLength="100" d="M200 500 L-40 520"/>
+            <path pathLength="100" d="M210 610 L-40 750"/>
+            <path pathLength="100" d="M270 730 L-40 1030"/>
+            <path pathLength="100" d="M740 200 L1040 -20"/>
+            <path pathLength="100" d="M780 290 L1040 150"/>
+            <path pathLength="100" d="M820 390 L1040 330"/>
+            <path pathLength="100" d="M800 500 L1040 520"/>
+            <path pathLength="100" d="M790 610 L1040 750"/>
+            <path pathLength="100" d="M730 730 L1040 1030"/>
+          </svg>
           <div class="game-top">
             <div><span class="stat-label">RECORRIDO</span><strong id="score">0 m</strong></div>
             <div class="road-name"><span class="road-dot"></span> HERMOSILLO, SONORA</div>
@@ -54,7 +68,6 @@
             <button id="left" class="direction" type="button" aria-label="Mover a la izquierda">←</button>
             <div class="drive-actions">
               <div class="control-hint" id="control-hint" hidden><strong>CONTROLES</strong><span>Desliza o usa las flechas</span></div>
-              <button id="accelerate" class="accelerate" type="button" aria-pressed="false" hidden>Acelerar <small>mantén · Espacio</small></button>
             </div>
             <button id="right" class="direction" type="button" aria-label="Mover a la derecha">→</button>
           </div>
