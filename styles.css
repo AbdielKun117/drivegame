@@ -41,6 +41,13 @@ h1 span { color: #e5713f; }
 .settings input { width: 20px; height: 20px; accent-color: #e87543; cursor: pointer; }
 .settings input[type="color"] { width: 48px; height: 36px; padding: 2px; border: 1px solid #eadbcc; border-radius: 6px; background: #fffaf2; }
 .settings select { font: inherit; min-height: 44px; max-width: 55%; padding: 6px 10px; border: 1px solid #eadbcc; border-radius: 6px; background: #fffaf2; color: #5a4940; }
+.player-settings input { font: inherit; width: 62%; min-width: 0; height: 40px; border: 1px solid #eadbcc; border-radius: 6px; padding: 6px 8px; background: #fffaf2; color: #5a4940; }
+.player-settings .menu-button { width: 100%; margin-top: 8px; }
+.privacy-note, #player-status, #leaderboard-status { font-size: 11px; line-height: 1.5; color: #745f52; overflow-wrap: anywhere; }
+#leaderboard-list { padding-left: 24px; }
+#leaderboard-list li { padding: 6px 0; }
+#leaderboard-list li span { display: inline-block; max-width: 65%; overflow-wrap: anywhere; }
+#leaderboard-list strong { float: right; }
 #settings-status { font-size: 12px; color: #a8462e; line-height: 1.4; }
 .audio-credits { font-size: 11px; line-height: 1.5; color: #907c6c; }
 .audio-credits a { color: #745f52; }

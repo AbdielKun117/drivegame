@@ -26,6 +26,52 @@ Abre la dirección local que muestra Vite. El juego no se ejecuta abriendo `inde
 - El récord se guarda en el navegador cuando el almacenamiento local está disponible.
 - El recorrido termina al colisionar con un peligro, no por un límite de tiempo. Todas las zonas de choque son un 20 % menores en ancho y largo que antes: rozar los bordes permite seguir jugando, pero los impactos de lleno siguen siendo mortales. El mismo margen se aplica a los carros que rebasan. La pantalla final indica la causa de la colisión.
 
+## Usuarios, puntuaciones y Supabase
+
+- Puedes jugar como invitado. Al pulsar **Jugar**, se crea o reutiliza una identidad anónima de Supabase; no se pide correo para jugar.
+- **Mi cuenta** permite registro/acceso por enlace al correo, sin contraseña. Abre el enlace en el dispositivo donde quieres jugar. La primera entrada crea el apodo; después puedes cambiarlo. El apodo público admite 3–20 letras sin acentos, números, espacios y guiones.
+- Cada partida registra inicio, metros, segundos de juego y final por choque o salida al menú. Una pestaña cerrada abruptamente deja una partida iniciada sin final; no se inventa un resultado ni se reintentan partidas offline. Los errores se muestran en el menú o en el resultado y no impiden jugar ni conservar el récord local.
+- La **Tabla de puntuaciones** muestra los 20 mejores jugadores, con una sola marca por cuenta. Solo las partidas empezadas con cuenta registrada y terminadas por choque publican puntuación; salir al menú únicamente registra uso. Registrarse después no publica las partidas anteriores de invitado.
+- El correo permanece en Supabase Auth, no en las tablas públicas. El cliente del juego envía identidad, apodo y datos de partida, no añade IP, geolocalización ni huella de dispositivo; Supabase puede mantener sus propios registros técnicos. Las estadísticas de uso solo están disponibles para el administrador desde SQL Editor.
+- Una identidad de invitado no equivale a una persona: borrar datos del navegador o cambiar de dispositivo crea otra. El acceso por correo no migra automáticamente el historial del invitado. En una futura app móvil, el enlace necesitará configurar enlaces profundos (deep links).
+
+### Activación del proyecto
+
+La dirección base es `https://akvvzeehnbyuqiwgtbzs.supabase.co`, sin `/rest/v1/`. El juego utiliza únicamente la clave **Publishable**, que es pública; nunca la contraseña de Postgres ni una clave `secret`/`service_role`.
+
+1. En **SQL Editor**, ejecuta una vez el archivo completo `supabase/migrations/20261128060000_player_accounts.sql` en el proyecto nuevo. Crea perfiles, partidas, récords y funciones con permisos explícitos y RLS. Si ya tienes tablas con esos nombres, no lo ejecutes sin revisar los conflictos.
+2. En **Authentication → Sign In / Providers**, habilita **Email** y **Anonymous Sign-Ins**. Conserva los límites de peticiones. Para producción, configura CAPTCHA y su token en el cliente antes de exigirlo a los invitados; esta primera versión no incluye un widget CAPTCHA.
+3. En **Authentication → URL Configuration**, pon la URL publicada del juego como **Site URL** y añádela también a **Redirect URLs**. Para pruebas locales añade exactamente la dirección utilizada, por ejemplo `http://127.0.0.1:5173/`. Si Vite cambia de puerto, autoriza también esa dirección. Mantén la plantilla estándar de Magic Link con `{{ .ConfirmationURL }}`.
+4. Configura **SMTP propio** antes de abrir registros al público: el correo integrado de Supabase tiene restricciones de destinatarios y límites bajos. Comprueba el envío y recepción del enlace con tu correo.
+5. Copia `.env.example` a `.env.local` para desarrollo. Ambas variables son públicas (`VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`), y `.env.local` está ignorado por Git. En el alojamiento web configura las mismas variables **antes de compilar** y vuelve a desplegar. No agregues secretos a variables `VITE_*`: quedan visibles en el navegador.
+6. Comprueba una partida de invitado, registro por correo, otra partida con cuenta y actualización de la tabla. Si falta una configuración, se muestra el error; no se anuncia una puntuación guardada sin confirmación del servidor.
+
+**Conexión con GitHub:** vincular el repositorio no instala automáticamente esta integración ni aloja el juego. Las tablas se versionan como migraciones SQL en `supabase/migrations`. Para despliegues automáticos debes preparar Supabase CLI/configuración y habilitar/configurar la integración de GitHub (directorio de trabajo `.` y rama de producción apropiada). Si aplicas primero el SQL manualmente, sincroniza su historial de migraciones antes de activar despliegues para no intentar crear las mismas tablas dos veces. No subas credenciales de base de datos al repositorio. Esta versión deja la migración preparada, pero no configura por sí sola el despliegue remoto desde GitHub.
+
+### Consultar el uso (solo administrador)
+
+Ejecuta en **SQL Editor** para ver los últimos 30 días, agrupados por fecha UTC:
+
+```sql
+select (started_at at time zone 'UTC')::date as dia,
+  count(*) as partidas_iniciadas,
+  count(*) filter (where ended_at is not null) as partidas_guardadas,
+  count(*) filter (where guest) as partidas_invitado,
+  count(distinct user_id) as identidades_activas,
+  round((coalesce(sum(seconds), 0) / 60)::numeric, 1) as minutos_jugados,
+  coalesce(sum(meters), 0) as metros
+from public.game_runs
+where started_at >= now() - interval '30 days'
+group by 1 order by 1 desc;
+
+select count(*) as cuentas_con_correo
+from auth.users where not is_anonymous and email_confirmed_at is not null;
+```
+
+Los minutos y metros solo suman partidas con final guardado; no incluyen actividad que se cerró sin guardar. Para borrar los datos de un jugador, elimina su usuario desde **Authentication → Users**: los perfiles, partidas y récords se eliminan en cascada. Define una política de retención y limpieza de invitados antes de un lanzamiento público.
+
+**Límite del ranking básico:** la base de datos verifica propiedad, final único, número de partidas por minuto y distancia máxima compatible con 63 m/s. No permite escribir directamente récords o partidas desde la API. Esto no es un sistema antitrampas: el juego corre en el cliente y un usuario puede falsificar resultados plausibles. No lo uses para premios o competiciones sin validación de juego en un servidor.
+
 ## Obstáculos y eventos
 
 - Baches irregulares con escombros y variantes con agua; los gigantes abarcan dos carriles.

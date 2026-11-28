@@ -22,6 +22,24 @@
             <p class="subtitle">Esquiva el tráfico y sobrevive a los baches en un recorrido por el desierto.</p>
             <p class="menu-record">Tu récord <strong id="menu-best">0 m</strong></p>
             <button class="start-button" id="play" type="button">Jugar <span aria-hidden="true">→</span></button>
+            <details class="settings player-settings">
+              <summary>Mi cuenta · registro gratis</summary>
+              <p id="player-identity">Jugando como invitado</p>
+              <form id="player-form">
+                <label><span>Apodo público</span><input id="player-nickname" type="text" minlength="3" maxlength="20" pattern="[A-Za-z0-9_ \-]{3,20}" autocomplete="nickname" required></label>
+                <label><span>Correo</span><input id="player-email" type="email" autocomplete="email" required></label>
+                <button class="menu-button" id="player-submit" type="submit">Enviar enlace de acceso</button>
+              </form>
+              <button class="menu-button" id="player-logout" type="button" hidden>Cerrar sesión</button>
+              <p id="player-status" role="status"></p>
+              <p class="privacy-note">Puedes jugar sin registrarte. Guardamos una identidad de invitado, partidas, metros y tiempo jugado para medir el uso. Solo las cuentas con correo publican en la tabla; únicamente se muestra el apodo y la puntuación, nunca el correo. El acceso es por enlace, sin contraseña.</p>
+            </details>
+            <details class="settings" id="leaderboard">
+              <summary>Tabla de puntuaciones</summary>
+              <p id="leaderboard-status" role="status">Mejores recorridos de Bachenora.</p>
+              <ol id="leaderboard-list"></ol>
+              <button class="menu-button" id="leaderboard-refresh" type="button">Actualizar tabla</button>
+            </details>
             <details class="settings">
               <summary>Configuración</summary>
               <label><span>Color de tu carro</span><input id="setting-color" type="color" value="#ed7848"></label>
@@ -77,6 +95,7 @@
             <p class="eyebrow" id="overlay-kicker">FIN DEL RECORRIDO</p>
             <h2 id="overlay-title">¡Chocaste!</h2>
             <p id="overlay-text"></p>
+            <p id="result-save-status" role="status"></p>
             <button class="start-button" id="start" type="button">Volver a jugar <span aria-hidden="true">→</span></button>
             <button class="menu-button" id="result-menu" type="button">Menú principal</button>
           </div>

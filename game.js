@@ -5,6 +5,7 @@ import { createWeather, updateWeather, createRainVisuals, updateRainVisuals } fr
 import { planOvertake, createOvertaker, updateOvertaker, createTrafficVehicle, updateLaneChange } from "./traffic-events.js";
 import { createBus, createPatrol } from "./vehicle-models.js";
 import { createSignal, updateSignal, drivingSpeed, createPursuit, updatePursuit } from "./intersection-events.js";
+import { setupPlayers } from "./player-ui.js";
 
 const canvas = document.getElementById("game");
 const scoreElement = document.getElementById("score");
@@ -24,6 +25,7 @@ const colorInput = document.getElementById("setting-color");
 const radioInput = document.getElementById("setting-radio");
 const radioButton = document.getElementById("radio-next");
 const pursuitStatus = document.getElementById("pursuit-status");
+const players = setupPlayers();
 const settingInputs = {
   buttons: document.getElementById("setting-buttons"),
   music: document.getElementById("setting-music"),
@@ -318,6 +320,13 @@ let signal = null;
 let signalTimer = 4;
 let pursuit = null;
 let keyAccelerating = false;
+let onlineRun = null;
+
+function saveOnlineRun(outcome) {
+  const handle = onlineRun;
+  onlineRun = null;
+  void players.endRun(handle, distance, runTime, outcome);
+}
 
 function releaseDrivingInput() {
   keyAccelerating = false;
@@ -440,12 +449,14 @@ function start() {
   gameInterface.hidden = false;
   gameInterface.inert = false;
   playing = true;
+  onlineRun = players.beginRun();
   void audio.start();
   playButton.blur();
   startButton.blur();
 }
 
 function showMenu() {
+  if (playing) saveOnlineRun("menu");
   playing = false;
   audio.stop();
   hideControlHint();
@@ -462,6 +473,7 @@ function showMenu() {
 }
 
 function finish(obstacleType) {
+  saveOnlineRun("crash");
   playing = false;
   releaseDrivingInput();
   pursuitStatus.hidden = true;
