@@ -9,6 +9,8 @@ export function setupPlayers() {
   const email = document.getElementById("player-email");
   const nickname = document.getElementById("player-nickname");
   const submit = document.getElementById("player-submit");
+  const saveNickname = document.getElementById("player-save-nickname");
+  const skipSync = document.getElementById("player-skip-sync");
   const logout = document.getElementById("player-logout");
   const ranking = document.getElementById("leaderboard-list");
   const rankingStatus = document.getElementById("leaderboard-status");
@@ -21,27 +23,22 @@ export function setupPlayers() {
   function report(error, target = status) {
     console.error("No se pudo completar la operacion de jugadores.", error);
     target.textContent = `No se pudo completar: ${error.message}. Puedes seguir jugando sin guardar en linea.`;
+    skipSync.hidden = !service;
   }
 
   async function refreshIdentity() {
     const version = ++refreshVersion;
-    const user = await service.user();
-    let profile = null;
-    if (user && !user.is_anonymous) {
-      profile = await service.profile(user);
-      if (!profile && user.user_metadata?.nickname) {
-        await service.saveNickname(user.user_metadata.nickname);
-        profile = { nickname: user.user_metadata.nickname };
-      }
-    }
+    const { user, nickname: name, synced } = await service.ensureIdentity();
     if (version !== refreshVersion) return;
     registered = Boolean(user && !user.is_anonymous);
-    identity.textContent = registered ? `Tu cuenta · ${profile?.nickname ?? "Elige un apodo"}` : "Jugando como invitado";
+    identity.textContent = `${registered ? "Tu cuenta" : "Tu invitado"} · ${name}`;
     email.closest("label").hidden = registered;
     email.required = !registered;
-    submit.textContent = registered ? "Guardar apodo" : "Enviar enlace de acceso";
+    submit.hidden = registered;
     logout.hidden = !registered;
-    if (profile) nickname.value = profile.nickname;
+    nickname.value = name;
+    if (synced) status.textContent = "Resultados sincronizados. Conservamos tu mejor puntuacion.";
+    skipSync.hidden = true;
   }
 
   async function refreshRanking() {
@@ -121,6 +118,30 @@ export function setupPlayers() {
       submit.disabled = false;
     }
   });
+  saveNickname.addEventListener("click", async () => {
+    saveNickname.disabled = true;
+    try {
+      if (!service) throw new Error("Supabase no esta configurado");
+      await service.saveNickname(nickname.value);
+      await refreshIdentity();
+      status.textContent = "Apodo guardado. Tu puntuacion sigue siendo la misma.";
+    } catch (error) {
+      report(error);
+    } finally {
+      saveNickname.disabled = false;
+    }
+  });
+  skipSync.addEventListener("click", async () => {
+    if (!confirm("¿Continuar sin transferir los resultados del invitado? No se combinaran con esta cuenta.")) return;
+    try {
+      if (!service) throw new Error("Supabase no esta configurado");
+      service.discardTransfer();
+      await refreshIdentity();
+      status.textContent = "Continuas sin transferir los resultados del invitado.";
+    } catch (error) {
+      report(error);
+    }
+  });
   refreshButton.addEventListener("click", () => { void refreshRanking(); });
   document.getElementById("leaderboard").addEventListener("toggle", event => {
     if (event.target.open) void refreshRanking();
@@ -159,9 +180,7 @@ export function setupPlayers() {
         if (handle.version === runVersion && outcome === "crash") {
           resultStatus.textContent = published
             ? "Partida guardada. La tabla conserva tu mejor recorrido."
-            : run.guest
-              ? "Partida de invitado guardada. Entra con tu correo desde el menu para publicar tus proximas puntuaciones."
-              : "Partida guardada, pero no publicada. Guarda tu apodo en Mi cuenta para publicar tus proximas puntuaciones.";
+            : "Partida guardada, pero el servidor no publico la puntuacion.";
         }
       } catch (error) {
         report(error, handle.version === runVersion && outcome === "crash" ? resultStatus : status);

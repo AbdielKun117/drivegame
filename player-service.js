@@ -7,8 +7,11 @@ export function validateNickname(value) {
 }
 
 export class PlayerService {
-  constructor(client) {
+  constructor(client, storage = globalThis.localStorage) {
     this.client = client;
+    this.storage = storage;
+    this.identityPromise = null;
+    this.syncPromise = null;
   }
 
   async user() {
@@ -18,6 +21,14 @@ export class PlayerService {
   }
 
   async requestLink(email, nickname, redirectTo) {
+    await this.saveNickname(nickname);
+    const user = await this.user();
+    if (user?.is_anonymous) {
+      const { data, error } = await this.client.rpc("prepare_guest_transfer", { email_address: email.trim() });
+      if (error) throw error;
+      if (typeof data !== "string") throw new Error("No se pudo preparar la sincronizacion.");
+      this.storage.setItem("bachenora-guest-transfer", data);
+    }
     const { error } = await this.client.auth.signInWithOtp({
       email: email.trim(),
       options: {
@@ -28,29 +39,61 @@ export class PlayerService {
     if (error) throw error;
   }
 
-  async profile(user) {
-    const { data, error } = await this.client.from("player_profiles")
-      .select("nickname").eq("user_id", user.id).maybeSingle();
+  async saveNickname(nickname) {
+    await this.ensureIdentity();
+    const { error } = await this.client.rpc("set_player_nickname", { new_nickname: validateNickname(nickname) });
     if (error) throw error;
-    return data;
   }
 
-  async saveNickname(nickname) {
-    const user = await this.user();
-    if (!user || user.is_anonymous) throw new Error("Abre primero el enlace de tu correo.");
-    const { error } = await this.client.from("player_profiles")
-      .upsert({ user_id: user.id, nickname: validateNickname(nickname) }, { onConflict: "user_id" });
-    if (error) throw error;
+  async syncGuest(user) {
+    if (user.is_anonymous) return false;
+    if (this.syncPromise) return this.syncPromise;
+    this.syncPromise = (async () => {
+      const token = this.storage.getItem("bachenora-guest-transfer");
+      if (!token) return false;
+      const { error } = await this.client.rpc("claim_guest_results", { transfer_token: token });
+      if (error) throw error;
+      if (this.storage.getItem("bachenora-guest-transfer") === token) {
+        this.storage.removeItem("bachenora-guest-transfer");
+      }
+      return true;
+    })();
+    try {
+      return await this.syncPromise;
+    } finally {
+      this.syncPromise = null;
+    }
+  }
+
+  discardTransfer() {
+    this.storage.removeItem("bachenora-guest-transfer");
+  }
+
+  async ensureIdentity() {
+    if (this.identityPromise) return this.identityPromise;
+    this.identityPromise = (async () => {
+      let user = await this.user();
+      if (!user) {
+        const { data, error } = await this.client.auth.signInAnonymously();
+        if (error) throw error;
+        user = data.user;
+      }
+      if (!user) throw new Error("No se pudo iniciar la sesion de invitado.");
+      const synced = await this.syncGuest(user);
+      const { data, error } = await this.client.rpc("ensure_player_profile");
+      if (error) throw error;
+      if (typeof data !== "string") throw new Error("El servidor no devolvio un apodo valido.");
+      return { user, nickname: data, synced };
+    })();
+    try {
+      return await this.identityPromise;
+    } finally {
+      this.identityPromise = null;
+    }
   }
 
   async startRun() {
-    let user = await this.user();
-    if (!user) {
-      const { data, error } = await this.client.auth.signInAnonymously();
-      if (error) throw error;
-      user = data.user;
-    }
-    if (!user) throw new Error("No se pudo iniciar la sesion de invitado.");
+    const { user } = await this.ensureIdentity();
     const { data, error } = await this.client.rpc("start_game_run");
     if (error) throw error;
     if (typeof data !== "string") throw new Error("El servidor no devolvio una partida valida.");

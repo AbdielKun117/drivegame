@@ -23,16 +23,18 @@
             <p class="menu-record">Tu récord <strong id="menu-best">0 m</strong></p>
             <button class="start-button" id="play" type="button">Jugar <span aria-hidden="true">→</span></button>
             <details class="settings player-settings">
-              <summary>Mi cuenta · registro gratis</summary>
-              <p id="player-identity">Jugando como invitado</p>
+              <summary>Mi jugador · apodo y correo opcional</summary>
+              <p id="player-identity">Preparando tu invitado…</p>
               <form id="player-form">
                 <label><span>Apodo público</span><input id="player-nickname" type="text" minlength="3" maxlength="20" pattern="[A-Za-z0-9_ \-]{3,20}" autocomplete="nickname" required></label>
+                <button class="menu-button" id="player-save-nickname" type="button">Guardar apodo</button>
                 <label><span>Correo</span><input id="player-email" type="email" autocomplete="email" required></label>
-                <button class="menu-button" id="player-submit" type="submit">Enviar enlace de acceso</button>
+                <button class="menu-button" id="player-submit" type="submit">Vincular correo · enviar enlace</button>
               </form>
               <button class="menu-button" id="player-logout" type="button" hidden>Cerrar sesión</button>
               <p id="player-status" role="status"></p>
-              <p class="privacy-note">Puedes jugar sin registrarte. Guardamos una identidad de invitado, partidas, metros y tiempo jugado para medir el uso. Solo las cuentas con correo publican en la tabla; únicamente se muestra el apodo y la puntuación, nunca el correo. El acceso es por enlace, sin contraseña.</p>
+              <button class="menu-button" id="player-skip-sync" type="button" hidden>Continuar sin sincronizar</button>
+              <p class="privacy-note">Recibes un apodo automático y puedes cambiarlo sin correo. Invitados y cuentas aparecen en la tabla. Guardamos identidad, partidas, metros y tiempo jugado; solo el apodo y la puntuación son públicos. Vincula tu correo para recuperar tus resultados en otros dispositivos: abre el enlace en este navegador en una hora. Si ya tienes cuenta, se combinan los resultados y se conserva la mejor marca. Sin correo, borrar los datos del navegador crea otro invitado.</p>
             </details>
             <details class="settings" id="leaderboard">
               <summary>Tabla de puntuaciones</summary>
